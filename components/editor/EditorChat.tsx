@@ -1,11 +1,20 @@
-// components/editor/EditorChat.tsx — Wave 0 split of app/editor/[projectId]/page.tsx.
+// components/editor/EditorChat.tsx — Wave 2 rewrite (beginner-first).
 // Left chat column ONLY: prompt echo + message list + status/error/export
-// messages + prompt form. No state lives here — the editor page owns all
-// state and passes it down as props. Behaviour-identical.
+// messages + prompt form (+ starters above the input). No state lives
+// here — the editor page owns all state and passes it down as props.
+//
+// Wave 2 moves the old advanced slots OUT of this column — Theme Tokens,
+// Brand Kit and Credit Meter now live in the Advanced drawer only, so a
+// beginner never sees them here. Two layouts: "sidebar" (Step 3, next to
+// the preview) and "step" (Step 1, centred prompt step with a
+// plain-language EmptyState telling the beginner what to do next).
+// Light chrome only (Wave 0): white/slate + ONE indigo accent.
+"use client";
 
-import type { FormEvent, ReactNode, RefObject } from "react";
+import type { FormEvent, RefObject } from "react";
 import Link from "next/link";
 import type { ProjectMessage } from "@/lib/types";
+import { EmptyState } from "@/components/ui";
 import PromptStarters, { buildPromptFromFields } from "./PromptStarters";
 
 export interface EditorChatProps {
@@ -19,12 +28,12 @@ export interface EditorChatProps {
   onPromptChange: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
   inputRef: RefObject<HTMLInputElement | null>;
-  /** Theme tokens panel (Cut A #5) — rendered in the left column, below the chat. */
-  themeTokens?: ReactNode;
-  /** Cut B #10 — Brand Kit panel, rendered below the tokens panel. */
-  brandKitPanel?: ReactNode;
-  /** Cut B #14 — credit meter, rendered below the brand kit. */
-  creditMeter?: ReactNode;
+  /** "sidebar" = Step 3 next to the preview; "step" = Step 1 centred. */
+  variant?: "sidebar" | "step";
+  /** Submit button label — "Generate" on Step 1, "Send" while editing. */
+  submitLabel?: string;
+  /** Step 1 only: show the plain-language "what do I do next" empty state. */
+  showIntro?: boolean;
   /** Cut B #9 — a reference URL was entered in PromptStarters. */
   onReferenceUrl?: (url: string) => void;
 }
@@ -40,45 +49,54 @@ export default function EditorChat({
   onPromptChange,
   onSubmit,
   inputRef,
-  themeTokens,
-  brandKitPanel,
-  creditMeter,
+  variant = "sidebar",
+  submitLabel = "Send",
+  showIntro = false,
   onReferenceUrl,
 }: EditorChatProps) {
   return (
-    <aside className="flex w-full min-w-0 flex-col border-b border-zinc-200 md:w-96 md:border-r md:border-b-0 dark:border-zinc-800">
+    <aside
+      className={
+        variant === "step"
+          ? "flex w-full min-w-0 flex-col"
+          : "flex w-full min-w-0 flex-col border-b border-border md:w-96 md:border-r md:border-b-0"
+      }
+    >
       <div className="min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-4">
-        <p className="break-words text-xs text-zinc-500">
-          Prompt: <span className="text-zinc-700 dark:text-zinc-300">{projectPrompt}</span>
+        {showIntro ? (
+          <EmptyState
+            title="Apna store ek jumle me likho"
+            message="Apna store ek jumle me likho, phir Generate dabao — AI pehle plan banayega, phir theme aur pages."
+          />
+        ) : null}
+        <p className="break-words text-xs text-muted">
+          Prompt: <span className="text-body">{projectPrompt}</span>
         </p>
         {messages.map((m) => (
           <div
             key={m.id}
             className={`break-words rounded-xl px-3 py-2 text-sm ${
               m.role === "user"
-                ? "ml-8 bg-pink-50 text-pink-900 dark:bg-pink-950 dark:text-pink-100"
-                : "mr-8 bg-zinc-100 dark:bg-zinc-900"
+                ? "ml-8 bg-accent-soft text-accent-text"
+                : "mr-8 bg-panel"
             }`}
           >
             {m.text}
           </div>
         ))}
         {generating && status && (
-          <p className="animate-pulse text-sm text-pink-600">{status}</p>
+          <p className="animate-pulse text-sm text-accent">{status}</p>
         )}
         {exportMsg && (
-          <p className="break-words rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <p className="break-words rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {exportMsg}{" "}
             <Link href="/billing" className="font-semibold underline">
               Billing dekho
             </Link>
           </p>
         )}
-        {themeTokens}
-        {brandKitPanel}
-        {creditMeter}
       </div>
-      <form onSubmit={onSubmit} className="min-w-0 border-t border-zinc-200 p-3 dark:border-zinc-800">
+      <form onSubmit={onSubmit} className="min-w-0 border-t border-border p-3">
         {/* Cut A #2 — prompt starters sit directly above the prompt input. */}
         <div className="mb-3 max-h-72 min-w-0 overflow-x-hidden overflow-y-auto">
           <PromptStarters
@@ -95,19 +113,19 @@ export default function EditorChat({
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
             placeholder="Naya page ya edit likho… jaise “grocery store landing page”"
-            className="min-w-0 flex-1 rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="min-w-0 flex-1 rounded-full border border-border px-4 py-2 text-sm outline-none focus:border-accent"
           />
           <button
             type="submit"
             disabled={generating}
-            className="shrink-0 rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+            className="shrink-0 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {generating ? "…" : "Send"}
+            {generating ? "…" : submitLabel}
           </button>
         </div>
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         {!generating && status && (
-          <p className="mt-2 text-xs text-green-700 dark:text-green-400">{status}</p>
+          <p className="mt-2 text-xs text-green-700">{status}</p>
         )}
       </form>
     </aside>

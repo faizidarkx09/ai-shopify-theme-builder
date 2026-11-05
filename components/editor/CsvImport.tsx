@@ -116,8 +116,8 @@ export default function CsvImport({ onImport, existingCount = 0 }: CsvImportProp
         onDrop={handleDrop}
         className={`mt-3 cursor-pointer rounded-xl border-2 border-dashed px-4 py-6 text-center text-sm ${
           dragOver
-            ? "border-pink-500 bg-pink-50 dark:bg-pink-950"
-            : "border-zinc-300 text-zinc-500 hover:border-pink-400 dark:border-zinc-700 dark:text-zinc-400"
+            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
+            : "border-zinc-300 text-zinc-500 hover:border-indigo-400 dark:border-zinc-700 dark:text-zinc-400"
         }`}
       >
         Drop your Shopify CSV here, or click to choose a file
@@ -140,7 +140,7 @@ export default function CsvImport({ onImport, existingCount = 0 }: CsvImportProp
       <button
         type="button"
         onClick={downloadSample}
-        className="mt-2 text-xs font-semibold text-pink-600 underline hover:text-pink-700 dark:text-pink-400"
+        className="mt-2 text-xs font-semibold text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400"
       >
         Download sample CSV — see the expected format
       </button>
@@ -218,7 +218,7 @@ export default function CsvImport({ onImport, existingCount = 0 }: CsvImportProp
             type="button"
             disabled={products.length === 0}
             onClick={() => onImport(products)}
-            className="w-full rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+            className="w-full rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             Import {products.length} product{products.length === 1 ? "" : "s"}
             {existingCount > 0 ? " (replaces current products)" : ""}

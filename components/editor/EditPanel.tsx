@@ -20,6 +20,13 @@ export interface EditPanelProps {
   theme?: Theme | null;
   /** Cut C #22: called with the new theme when Animation Level changes. */
   onThemeChange?: (theme: Theme) => void;
+  /**
+   * Wave 2 — animation controls (per-section entrance/hover + theme
+   * Animation Level) live behind the editor's Advanced toggle. False in
+   * beginner mode hides the whole Animation block; defaults true so the
+   * panel keeps its old behaviour anywhere else it is used.
+   */
+  showAnimation?: boolean;
 }
 
 const FIELD =
@@ -54,6 +61,7 @@ export default function EditPanel({
   onClose,
   theme,
   onThemeChange,
+  showAnimation = true,
 }: EditPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -298,7 +306,9 @@ export default function EditPanel({
           </div>
         </div>
 
-        {/* ---- Cut C #22: per-section animation + theme animation level ---- */}
+        {/* ---- Cut C #22: per-section animation + theme animation level ----
+            Wave 2: hidden entirely unless showAnimation (Advanced ON). */}
+        {showAnimation ? (
         <div className="space-y-3 border-t border-gray-100 pt-3">
           <span className="block text-xs font-semibold text-gray-600">Animation</span>
           <label className="block">
@@ -405,6 +415,7 @@ export default function EditPanel({
             </label>
           ) : null}
         </div>
+        ) : null}
 
         <div className="flex gap-4 border-t border-gray-100 pt-3 text-sm">
           <label className="flex items-center gap-1.5 text-gray-700">

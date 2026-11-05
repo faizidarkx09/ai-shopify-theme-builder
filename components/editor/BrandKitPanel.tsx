@@ -43,7 +43,7 @@ const COLOR_FIELDS: Array<{ key: keyof ThemeColors; label: string }> = [
 ];
 
 const FIELD =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900";
+  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900";
 
 export default function BrandKitPanel({
   brandKit,

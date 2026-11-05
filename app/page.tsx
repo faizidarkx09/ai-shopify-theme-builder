@@ -1,3 +1,11 @@
+// app/page.tsx — Wave 1 landing rebuild (beginner-first).
+// Sirf 5 blocks: Hero (prompt box + ASLI mini store preview), 3 steps,
+// template gallery (3 live previews), FAQ (3 sawal), chhota footer.
+// Hata diya gaya: 5 dense loop cards, comparison table, loop mock
+// frames, "PROMPT → THEME → PAGES → EDIT → EXPORT" eyebrow, aur koi bhi
+// price / TEST MODE line. Generate flow waisa hi hai jaisa pehle tha:
+// project banta hai, prompt ?prompt= + sessionStorage se editor ko
+// milta hai, plan gate wahan chalta hai.
 "use client";
 
 import { useState } from "react";
@@ -7,6 +15,10 @@ import { getOrCreateDemoUser } from "@/lib/auth";
 import { FREE_PROJECT_LIMIT } from "@/lib/billing";
 import { getProjectStore } from "@/lib/db/store";
 import { DEMO_NICHES } from "@/lib/demoCatalog";
+import { THEME_PRESETS } from "@/lib/theme";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { MiniStorePreview } from "@/components/landing/MiniStorePreview";
 
 /** Cut B #18 — landing niche tabs: one tap pre-fills the prompt box. */
 const LANDING_NICHES = ["fashion", "beauty", "electronics"] as const;
@@ -20,94 +32,64 @@ const LANDING_NICHES = ["fashion", "beauty", "electronics"] as const;
  */
 export const LANDING_PROMPT_KEY = "ai-shopify-builder:landing-prompt";
 
+/** 3 visual steps — Prompt → Theme → Export. Bas itna hi. */
 const STEPS = [
   {
     n: "1",
-    title: "Prompt likho",
-    text: "Apni store ek jumle me batao — jaise “cosmetic e-commerce website, pink shade me” ya “modern fashion store, premium dark theme”.",
-  },
-  {
-    n: "2",
-    title: "Theme pehle, pages baad me",
-    text: "AI pehle ek consistent theme banata hai (colors, font, style), taake har page ek jaisa lage. Theme ke baghair page nahi banta.",
-  },
-  {
-    n: "3",
-    title: "Page-by-page streaming preview",
-    text: "AI ek turn me ek page banata hai aur tumko live banta hua nazar aata hai. Har naya page browser jaisi tab ban jata hai.",
-  },
-  {
-    n: "4",
-    title: "Section-wise edit",
-    text: "Kisi bhi section ko click kar ke text, image, color ya spacing badlo — ya chat me AI se kaho ke sirf woh section badal de.",
-  },
-  {
-    n: "5",
-    title: "Export to Shopify",
-    text: "Website ready ho to Shopify theme zip, code zip ya PNG export karo, aur zip ko Shopify > Online Store > Import se upload karo.",
-  },
-];
-
-const EXAMPLES = [
-  "cosmetic e-commerce website, pink shade me",
-  "modern fashion store, premium dark theme",
-  "grocery store landing page, fresh green style",
-];
-
-/**
- * Cut C #26 — "One app instead of six" comparison. Market figures are
- * TYPICAL / estimated costs from the research plan (theme $180+,
- * designer $500+) — never quotes, never what anyone will actually pay.
- * Our price stays "$9.99/month · TEST MODE ONLY — not a real price".
- */
-const COMPARISON = [
-  {
-    item: "Premium Shopify theme",
-    typical: "Typically $180+",
-    us: "Included — AI generates it",
-  },
-  {
-    item: "Freelance designer",
-    typical: "Typically $500+",
-    us: "Included — theme + pages in one prompt",
-  },
-  {
-    item: "Copywriter for store copy",
-    typical: "Typically varies — often $100s",
-    us: "AI draft included",
-  },
-  {
-    item: "Product photos",
-    typical: "Typically varies — often $100s",
-    us: "Placeholder images included",
-  },
-];
-
-/** Cut C #26 — the product loop as numbered CSS mock browser frames (no screenshots). */
-const LOOP_FRAMES = [
-  {
-    n: "1",
     title: "Prompt",
-    url: "theme-builder.app/new",
-    body: "Apni store ek jumle me batao — niche, vibe, colors.",
+    text: "Apni store ek jumle me batao — niche, vibe, colors.",
   },
   {
     n: "2",
     title: "Theme",
-    url: "theme-builder.app/theme",
-    body: "AI pehle ek named theme banata hai — colors, font, style — jo har page pe same rehta hai.",
+    text: "AI pehle ek consistent theme banata hai, phir usi theme me tumhare pages bante hain.",
   },
   {
     n: "3",
-    title: "Pages",
-    url: "theme-builder.app/pages",
-    body: "Home, Product, Category — page-by-page live preview, section-wise edit.",
+    title: "Export",
+    text: "Theme ready ho to Shopify zip download karo aur apni store me import karo.",
+  },
+];
+
+/**
+ * Template gallery — 3 named themes (lib/theme.ts presets).
+ * Har theme ka apna sample prompt hai; "Use this theme" usi prompt se
+ * generation start karta hai, to deriveTheme wahi preset chunta hai.
+ */
+const GALLERY_THEMES = [
+  {
+    presetId: "rose-glow",
+    prompt: "A skincare and beauty store with a soft pink glow theme",
+    line: "Soft pink beauty — skincare aur makeup stores ke liye.",
   },
   {
-    n: "4",
-    title: "Export",
-    url: "theme-builder.app/export",
-    body: "Shopify theme zip download karo aur Shopify me import karo — theme tumhara hai, hamare baghair bhi chalta hai.",
+    presetId: "noir-luxe",
+    prompt: "A modern fashion boutique, premium dark theme",
+    line: "Premium dark boutique — fashion aur luxury stores ke liye.",
+  },
+  {
+    presetId: "fresh-mart",
+    prompt: "A grocery store with fresh green style",
+    line: "Clean green grocery — fresh aur organic stores ke liye.",
+  },
+] as const;
+
+/** Hero preview — Rose Glow theme ka asli mini storefront. */
+const HERO_THEME = THEME_PRESETS.find((t) => t.presetId === "rose-glow")!;
+const HERO_PROMPT = "A skincare and beauty store with a soft pink glow theme";
+
+const FAQS = [
+  {
+    q: "Kya mujhe design ya coding aani chahiye?",
+    a: "Nahi. Bas apni store ek jumle me likho — design, colors aur pages AI banata hai.",
+  },
+  {
+    q: "Theme Shopify me kaise lagti hai?",
+    a: "Theme ready ho to Shopify theme zip download karo, phir Shopify > Online Store > Themes > Import se upload karo.",
+  },
+  {
+    q: "Kya try karna free hai?",
+    a: "Haan — pehle theme banao, account baad me. Export aur limits billing page par hain.",
   },
 ];
 
@@ -125,9 +107,9 @@ export default function Home() {
     setPrompt(found.prefillPrompt);
   }
 
-  function startBuilding(e: React.FormEvent) {
+  function startBuilding(e: React.FormEvent, givenPrompt?: string) {
     e.preventDefault();
-    const clean = prompt.trim();
+    const clean = (givenPrompt ?? prompt).trim();
     if (!clean) {
       setError("Pehle apni store ka prompt likho.");
       return;
@@ -161,232 +143,173 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-12">
-      <section className="text-center">
-        <p className="text-sm font-semibold tracking-wide text-pink-600 uppercase">
-          Prompt → Theme → Pages → Edit → Export
-        </p>
-        <h1 className="mx-auto mt-3 max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Prompt se apni Shopify theme banao — bina design ya coding jaane
-        </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
-          The only AI builder that exports a real Shopify theme zip — your
-          theme works without us. AI pehle tumhari store ka theme banata
-          hai, phir page-by-page website generate karta hai. Live preview
-          me edit karo aur aakhir me Shopify theme zip export karo.
-        </p>
+    <div className="stb-container flex-1">
+      {/* ---------- 1. Hero: prompt box + asli mini store preview ---------- */}
+      <section className="stb-section">
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+          <div className="text-center lg:text-left">
+            <h1 className="text-hero">
+              Apni Shopify theme ek prompt me banao
+            </h1>
+            <p className="stb-lead mx-auto mt-4 lg:mx-0">
+              Prompt likho, theme dekho, Shopify me export karo — bina design
+              ya coding jaane.
+            </p>
 
-        {/* Cut B #18 — niche tabs above the prompt box */}
-        <div
-          className="mx-auto mt-8 flex max-w-2xl flex-wrap justify-center gap-2"
-          role="tablist"
-          aria-label="Store type"
-        >
-          {LANDING_NICHES.map((id) => {
-            const n = DEMO_NICHES.find((d) => d.id === id);
-            if (!n) return null;
+            {/* Moat line: 50-site research me 0/50 competitors ye karte hain. */}
+            <p className="mt-4 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+              The only AI builder that exports a real Shopify theme zip
+            </p>
+
+            {/* Niche text-chips — tap karte hi prompt bhar jata hai. */}
+            <div
+              className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start"
+              role="tablist"
+              aria-label="Store type"
+            >
+              {LANDING_NICHES.map((id) => {
+                const n = DEMO_NICHES.find((d) => d.id === id);
+                if (!n) return null;
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={niche === n.id}
+                    onClick={() => pickNiche(n.id)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
+                      niche === n.id
+                        ? "bg-accent text-white"
+                        : "border border-border bg-white text-body hover:border-accent hover:text-accent"
+                    }`}
+                  >
+                    {n.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <form
+              onSubmit={startBuilding}
+              className="mt-4 flex flex-col gap-3 sm:flex-row"
+            >
+              <input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Apni store batao… jaise “fashion store, premium look”"
+                aria-label="Apni store ka prompt likho"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-accent"
+              />
+              <Button type="submit" variant="primary" disabled={busy}>
+                {busy ? "Ban raha hai…" : "Generate karo"}
+              </Button>
+            </form>
+            {error && (
+              <p className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+                {error}{" "}
+                <Link href="/billing" className="font-semibold underline">
+                  Billing dekho
+                </Link>
+              </p>
+            )}
+            <p className="mt-3 text-sm text-muted">Free to try</p>
+          </div>
+
+          {/* Phone-width framed preview — asli storefront, mock nahi. */}
+          <div className="mx-auto w-full max-w-[420px]">
+            <MiniStorePreview
+              theme={HERO_THEME}
+              prompt={HERO_PROMPT}
+              label="Rose Glow theme ka sample store preview"
+            />
+            <p className="mt-3 text-center text-sm text-muted">
+              Aisa dikhega tumhara store — ye ek asli generated preview hai.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- 2. 3 steps: Prompt → Theme → Export ---------- */}
+      <section className="stb-section border-t border-border">
+        <h2 className="text-h2 text-center">Kaise kaam karta hai</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {STEPS.map((s) => (
+            <Card key={s.n}>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-accent text-base font-bold text-white">
+                {s.n}
+              </span>
+              <h3 className="mt-3 text-h3">{s.title}</h3>
+              <p className="mt-1 text-sm text-body">{s.text}</p>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------- 3. Template gallery: 3 live mini-previews ---------- */}
+      <section className="stb-section border-t border-border">
+        <h2 className="text-h2 text-center">Ready-made themes</h2>
+        <p className="stb-lead mx-auto mt-2 text-center">
+          Koi ek chuno — usi theme se tumhari store banna shuru hogi.
+        </p>
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {GALLERY_THEMES.map((g) => {
+            const theme = THEME_PRESETS.find(
+              (t) => t.presetId === g.presetId,
+            );
+            if (!theme) return null;
             return (
-              <button
-                key={n.id}
-                type="button"
-                role="tab"
-                aria-selected={niche === n.id}
-                onClick={() => pickNiche(n.id)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
-                  niche === n.id
-                    ? "bg-pink-600 text-white"
-                    : "border border-zinc-300 text-zinc-600 hover:border-pink-500 hover:text-pink-600 dark:border-zinc-700 dark:text-zinc-400"
-                }`}
-              >
-                {n.label}
-              </button>
+              <Card key={g.presetId} padding="compact">
+                {/* Peek-height preview — header + hero nazar aate hain,
+                    baaki sections neeche scroll jaisi jhalak dete hain. */}
+                <div className="max-h-[380px] overflow-hidden rounded-xl">
+                  <MiniStorePreview
+                    theme={theme}
+                    prompt={g.prompt}
+                    label={`${theme.name} theme ka sample store preview`}
+                  />
+                </div>
+                <h3 className="mt-4 text-h3">{theme.name}</h3>
+                <p className="mt-1 text-sm text-body">{g.line}</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={(e) => startBuilding(e, g.prompt)}
+                  className="mt-4 w-full"
+                >
+                  Use this theme
+                </Button>
+              </Card>
             );
           })}
         </div>
+      </section>
 
-        <form
-          onSubmit={startBuilding}
-          className="mx-auto mt-4 flex max-w-2xl flex-col gap-3 sm:flex-row"
-        >
-          <input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Apni store batao… jaise “fashion store, premium dark theme”"
-            className="flex-1 rounded-full border border-zinc-300 px-5 py-3 text-base outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-full bg-pink-600 px-6 py-3 font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
-          >
-            {busy ? "Ban raha hai…" : "Generate karo →"}
-          </button>
-        </form>
-        {error && (
-          <p className="mx-auto mt-3 max-w-2xl rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {error}{" "}
-            <Link href="/billing" className="font-semibold underline">
-              Billing dekho
-            </Link>
-          </p>
-        )}
-        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-          No signup needed — pehle theme banao, account baad me.
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {EXAMPLES.map((ex) => (
-            <button
-              key={ex}
-              type="button"
-              onClick={() => setPrompt(ex)}
-              className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-600 hover:border-pink-500 hover:text-pink-600 dark:border-zinc-700 dark:text-zinc-400"
-            >
-              {ex}
-            </button>
+      {/* ---------- 4. FAQ — sirf 3 sawal ---------- */}
+      <section className="stb-section border-t border-border">
+        <h2 className="text-h2 text-center">Aksar pooche gaye sawal</h2>
+        <div className="mx-auto mt-8 max-w-2xl space-y-4">
+          {FAQS.map((f) => (
+            <Card key={f.q} padding="compact">
+              <h3 className="text-h3">{f.q}</h3>
+              <p className="mt-1 text-sm text-body">{f.a}</p>
+            </Card>
           ))}
         </div>
       </section>
 
-      <section className="mt-16">
-        <h2 className="text-center text-2xl font-bold">Core loop kaise kaam karta hai</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {STEPS.map((s) => (
-            <div
-              key={s.n}
-              className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800"
-            >
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-pink-600 font-bold text-white">
-                {s.n}
-              </span>
-              <h3 className="mt-3 font-semibold">{s.title}</h3>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                {s.text}
-              </p>
-            </div>
-          ))}
+      {/* ---------- 5. Minimal footer ---------- */}
+      <footer className="flex flex-col items-center justify-between gap-2 border-t border-border py-6 text-sm text-muted sm:flex-row">
+        <p>AI Shopify Theme Builder — prompt se theme, theme se store.</p>
+        <div className="flex gap-4">
+          <Link href="/dashboard" className="text-muted hover:text-accent">
+            Dashboard
+          </Link>
+          <Link href="/billing" className="text-muted hover:text-accent">
+            Billing
+          </Link>
         </div>
-      </section>
-
-      {/* Cut C #26 — "One app instead of six" comparison table. */}
-      <section className="mt-16">
-        <h2 className="text-center text-2xl font-bold">One app instead of six</h2>
-        <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-zinc-600 dark:text-zinc-400">
-          Alag-alag khareedo to har cheez ka apna bill hota hai. Yahan ek
-          hi flow me sab kuch milta hai.
-        </p>
-        <div className="mx-auto mt-8 max-w-3xl overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="px-4 py-3 font-semibold">Kya chahiye</th>
-                <th className="px-4 py-3 font-semibold">Alag se khareedo to</th>
-                <th className="px-4 py-3 font-semibold">Is app me</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON.map((row) => (
-                <tr
-                  key={row.item}
-                  className="border-b border-zinc-100 dark:border-zinc-900"
-                >
-                  <td className="px-4 py-3 font-medium">{row.item}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                    {row.typical}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-pink-600">
-                    {row.us}
-                  </td>
-                </tr>
-              ))}
-              <tr>
-                <td className="px-4 py-3 font-medium">Total</td>
-                <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                  Typically $680+ — sirf theme + designer mila kar; copy aur
-                  photos is ke upar (all typical/estimated, not quotes)
-                </td>
-                <td className="px-4 py-3 font-semibold text-pink-600">
-                  $9.99/month · TEST MODE ONLY — not a real price
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Cut C #26 — Prompt → Theme → Pages → Export loop (CSS mock
-          browser frames, no screenshots, no fake product images). */}
-      <section className="mt-16">
-        <h2 className="text-center text-2xl font-bold">
-          Prompt → Theme → Pages → Export — phir dobara
-        </h2>
-        <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-zinc-600 dark:text-zinc-400">
-          Ye loop hai, one-way street nahi: export ke baad wapas edit karo,
-          dobara export karo — har round theme aur behtar hota hai.
-        </p>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {LOOP_FRAMES.map((f) => (
-            <div
-              key={f.n}
-              className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800"
-            >
-              <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                <span className="ml-1 truncate rounded-full bg-white px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800">
-                  {f.url}
-                </span>
-              </div>
-              <div className="p-4">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-pink-600 text-sm font-bold text-white">
-                  {f.n}
-                </span>
-                <h3 className="mt-3 font-semibold">{f.title}</h3>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {f.body}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="mt-4 text-center text-sm text-zinc-500">
-          ↻ Loop wapas: Export → Edit → Export — jab tak theme perfect na ho.
-        </p>
-      </section>
-
-      <section className="mt-16 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
-          <h3 className="font-semibold">Free plan</h3>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Maximum {FREE_PROJECT_LIMIT} projects. Dekh aur edit kar sakte ho —
-            Shopify export paid plan me hai.
-          </p>
-        </div>
-        <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
-          <h3 className="font-semibold">Placeholder content</h3>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Exported theme me products aur text placeholder hote hain. Asli
-            products Shopify me khud lagane honge — ye real catalog sync nahi
-            hai.
-          </p>
-        </div>
-        <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
-          <h3 className="font-semibold">Bina key ke demo</h3>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            GEMINI_API_KEY na ho to built-in template generator se demo chalta
-            hai. Koi key, account ya payment zaroori nahi.
-          </p>
-        </div>
-      </section>
-
-      <div className="mt-12 text-center">
-        <Link
-          href="/dashboard"
-          className="rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
-        >
-          Dashboard kholo →
-        </Link>
-      </div>
+      </footer>
     </div>
   );
 }

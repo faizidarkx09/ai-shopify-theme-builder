@@ -134,7 +134,7 @@ export default function PlanApproval({
                     onPlanChange(updatePlanPageTitle(plan, pageIndex, e.target.value))
                   }
                   aria-label={`Title for ${page.slug} page`}
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
                 />
                 <span className="text-xs text-zinc-400">/{page.slug}</span>
                 {plan.pages.length > 1 && (
@@ -163,7 +163,7 @@ export default function PlanApproval({
                         )
                       }
                       aria-label={`Title for ${section.type} section on ${page.title}`}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
                     />
                     <button
                       type="button"
@@ -210,7 +210,7 @@ export default function PlanApproval({
                     )
                   }
                   disabled={generating}
-                  className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold hover:border-pink-500 hover:text-pink-600 disabled:opacity-50 dark:border-zinc-700"
+                  className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
                 >
                   + Add section
                 </button>
@@ -236,7 +236,7 @@ export default function PlanApproval({
             type="button"
             onClick={() => onPlanChange(addPlanPage(plan, newPageType))}
             disabled={generating}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-pink-500 hover:text-pink-600 disabled:opacity-50 dark:border-zinc-700"
+            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
           >
             + Add page
           </button>
@@ -248,7 +248,7 @@ export default function PlanApproval({
           type="button"
           onClick={onApprove}
           disabled={generating}
-          className="rounded-full bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+          className="rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           {generating ? "Building…" : "Approve & start generation"}
         </button>

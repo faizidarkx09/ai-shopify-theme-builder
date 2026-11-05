@@ -1,5 +1,9 @@
 export { default as PageEditor } from "./PageEditor";
 export type { PageEditorProps } from "./PageEditor";
+export { default as AdvancedPanel } from "./AdvancedPanel";
+export type { AdvancedPanelProps } from "./AdvancedPanel";
+export { WIZARD_STEPS, WizardStepper, deriveWizardStep } from "./WizardSteps";
+export type { WizardStepArgs, WizardStepperProps } from "./WizardSteps";
 export { default as SectionToolbar } from "./SectionToolbar";
 export type { SectionToolbarProps } from "./SectionToolbar";
 export { default as EditPanel } from "./EditPanel";

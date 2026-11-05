@@ -1,33 +1,163 @@
 @import "tailwindcss";
 
+/* ============================================================
+   WAVE 0 — Design system (beginner-first, light + clean)
+   App chrome ONLY (landing, editor shell, dashboard, billing).
+   The generated storefront keeps its own theme colours — see
+   components/sections/SectionRenderer.tsx, do NOT restyle it.
+   Tokens: page #FFFFFF · panel #F8FAFC · ink #0F172A ·
+   body #475569 · border #E2E8F0 · accent #4F46E5 (ONE accent).
+   No pink, no dark hero, no black backgrounds anywhere.
+   ============================================================ */
+
 :root {
+  color-scheme: light;
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  /* --- Colour tokens (Tailwind v4: bg-page, text-ink, bg-accent …) --- */
+  --color-page: #ffffff;
+  --color-panel: #f8fafc;
+  --color-ink: #0f172a;
+  --color-body: #475569;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-soft: #eef2ff;
+  --color-accent-text: #3730a3;
+
+  /* --- Font: Inter via next/font in app/layout.tsx --- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* --- Type scale (font-size / line-height) --- */
+  --text-hero: 2.5rem; /* 40px desktop */
+  --text-hero--line-height: 3rem; /* 48px */
+  --text-h2: 1.75rem; /* 28px */
+  --text-h2--line-height: 2.25rem; /* 36px */
+  --text-h3: 1.25rem; /* 20px */
+  --text-h3--line-height: 1.75rem; /* 28px */
+  --text-body: 1rem; /* 16px */
+  --text-body--line-height: 1.6;
+  --text-small: 0.875rem; /* 14px */
+  --text-small--line-height: 1.5;
+
+  /* --- Layout --- */
+  --spacing-content: 70rem; /* 1120px max content width */
+  --spacing-section: 5rem; /* 80px desktop section gap */
+  --spacing-section-mobile: 3rem; /* 48px mobile section gap */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--color-page);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Headings: near-black slate, tight leading, semibold/bold. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-ink);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  h1 {
+    font-size: 2.5rem; /* 40px */
+    line-height: 3rem; /* 48px */
+    font-weight: 700;
+  }
+  h2 {
+    font-size: 1.75rem; /* 28px */
+    line-height: 2.25rem;
+  }
+  h3 {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.75rem;
+  }
+
+  a {
+    color: var(--color-accent);
+  }
+  a:hover {
+    color: var(--color-accent-hover);
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-text);
+  }
+
+  /* One visible focus ring everywhere — indigo, never pink/black. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
+@layer components {
+  /* Max-width content wrapper: 1120px, centred, airy side padding. */
+  .stb-container {
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .stb-container {
+      padding-inline: 1.5rem;
+    }
+  }
 
-/* Tailwind v4 (CSS-first): no tailwind.config.js is needed for this app.
-   Theme tokens live in @theme above; section previews use inline styles
-   from the generated Theme so a project's colors apply directly. */
+  /* Generous vertical rhythm: 64–96px desktop, 48px mobile. */
+  .stb-section {
+    padding-block: 3rem; /* 48px mobile */
+  }
+  @media (min-width: 768px) {
+    .stb-section {
+      padding-block: 4rem 6rem; /* 64–96px desktop */
+    }
+  }
+
+  /* Eyebrow / kicker line above a heading — indigo, small, tracked. */
+  .stb-eyebrow {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  /* Plain-language lead paragraph under a heading. */
+  .stb-lead {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--color-body);
+    max-width: 42rem;
+  }
+}
 
 /* Section entrance / hover motion (Wave 0 foundation for Cut C #22).
    Keep animations short (<=0.6s) and transform/opacity-only so the

@@ -46,7 +46,7 @@ export const PERSONALITIES: readonly Personality[] = [
 /** Suggestion chips — original wording, one per common store idea. */
 export const SUGGESTION_CHIPS: readonly string[] = [
   "A cosy candle shop with warm, handmade scents",
-  "A skincare store with a soft pink glow",
+  "A skincare store with a soft blush glow",
   "A sneaker shop for streetwear lovers",
   "A fresh grocery store with same-day delivery",
   "A coffee roastery selling beans and brewing gear",
@@ -127,7 +127,7 @@ export default function PromptStarters({
             key={n.id}
             type="button"
             onClick={() => onPick(n.prefillPrompt)}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold hover:border-pink-500 hover:text-pink-600 dark:border-zinc-700"
+            className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 dark:border-zinc-700"
           >
             {n.label}
           </button>
@@ -141,7 +141,7 @@ export default function PromptStarters({
             key={chip}
             type="button"
             onClick={() => onPick(chip)}
-            className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs hover:bg-pink-50 hover:text-pink-700 dark:bg-zinc-900 dark:hover:bg-pink-950 dark:hover:text-pink-300"
+            className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs hover:bg-indigo-50 hover:text-indigo-700 dark:bg-zinc-900 dark:hover:bg-indigo-950 dark:hover:text-indigo-300"
           >
             {chip}
           </button>
@@ -156,28 +156,28 @@ export default function PromptStarters({
             onChange={(e) => setStoreName(e.target.value)}
             placeholder="Store name — e.g. Ember & Oak"
             aria-label="Store name"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
           <input
             value={sells}
             onChange={(e) => setSells(e.target.value)}
             placeholder="What you sell — e.g. handmade candles"
             aria-label="What you sell"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
           <input
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
             placeholder="Who it is for — e.g. busy mums who love cosy homes"
             aria-label="Audience"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
           <input
             value={vibe}
             onChange={(e) => setVibe(e.target.value)}
             placeholder="Vibe — e.g. warm, calm, a little rustic"
             aria-label="Vibe"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </div>
 
@@ -193,7 +193,7 @@ export default function PromptStarters({
               title={p.description}
               className={`rounded-xl border px-3 py-2 text-left ${
                 personality === p.id
-                  ? "border-pink-500 bg-pink-50 dark:bg-pink-950"
+                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
                   : "border-zinc-300 hover:border-zinc-500 dark:border-zinc-700"
               }`}
             >
@@ -215,7 +215,7 @@ export default function PromptStarters({
             placeholder="https://example.com"
             inputMode="url"
             aria-label="Reference store URL (optional)"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
 

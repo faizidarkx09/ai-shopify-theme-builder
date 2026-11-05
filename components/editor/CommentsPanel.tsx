@@ -86,7 +86,7 @@ export default function CommentsPanel({
           <button
             type="button"
             onClick={onApplyAll}
-            className="rounded-full bg-pink-600 px-3 py-1 text-xs font-semibold text-white hover:bg-pink-700"
+            className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700"
           >
             Apply all comments
           </button>
@@ -112,7 +112,7 @@ export default function CommentsPanel({
           >
             <span
               className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-                comment.status === 'done' ? 'bg-zinc-400' : 'bg-pink-600'
+                comment.status === 'done' ? 'bg-zinc-400' : 'bg-indigo-600'
               }`}
             >
               {comment.status === 'done' ? '✓' : i + 1}
@@ -145,7 +145,7 @@ export default function CommentsPanel({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Add a note on this page…"
-            className="flex-1 rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="flex-1 rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
           <button
             type="submit"

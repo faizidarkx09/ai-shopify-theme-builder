@@ -75,6 +75,19 @@ export interface PageEditorProps {
   onCommentProposalAccept?: (commentId: string) => void;
   /** Fired when the user Discards a comment proposal. */
   onCommentProposalDiscard?: (commentId: string) => void;
+  /**
+   * Wave 2 — Advanced mode (editor page's Advanced toggle, OFF by
+   * default). Gates the Custom Block entry and the EditPanel animation
+   * controls; everything else here (preview, toolbar, chat, history,
+   * staged edits, regenerate, layout switcher, global sections) is the
+   * core Step-3 edit loop and stays visible in beginner mode.
+   */
+  advanced?: boolean;
+  /**
+   * Wave 2 — bump to open the Custom Block modal from the Advanced
+   * drawer (the modal itself still lives here, staged like any edit).
+   */
+  openCustomBlockSignal?: number;
 }
 
 interface PendingProposal {
@@ -117,6 +130,8 @@ export default function PageEditor({
   commentProposal,
   onCommentProposalAccept,
   onCommentProposalDiscard,
+  advanced = false,
+  openCustomBlockSignal = 0,
 }: PageEditorProps) {
   const ed = usePageEditor(projectId, page);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -137,6 +152,15 @@ export default function PageEditor({
   // Cut C #25: comment id of the proposal currently in the review box
   // (null for ordinary AI edits). Resolved only on Accept.
   const pendingCommentIdRef = useRef<string | null>(null);
+  // Wave 2 — Advanced drawer can open the Custom Block modal: open once
+  // per signal bump (the ref stops a remount re-opening it).
+  const lastCustomSignalRef = useRef(0);
+  useEffect(() => {
+    if (openCustomBlockSignal > lastCustomSignalRef.current) {
+      lastCustomSignalRef.current = openCustomBlockSignal;
+      setCustomOpen(true);
+    }
+  }, [openCustomBlockSignal]);
 
   // Cut C #25 — an external comment proposal enters the same staged
   // review box as an AI edit. Runs only when a NEW proposal arrives
@@ -653,7 +677,9 @@ export default function PageEditor({
             <span className="block text-xs font-semibold text-gray-700">
               Add section with AI
             </span>
-            {/* Cut C #21 — Custom block (quiz / calculator / countdown / timeline). */}
+            {/* Cut C #21 — Custom block (quiz / calculator / countdown / timeline).
+                Wave 2: Advanced only — entry also lives in the Advanced drawer. */}
+            {advanced ? (
             <button
               type="button"
               onClick={() => setCustomOpen(true)}
@@ -661,6 +687,7 @@ export default function PageEditor({
             >
               🧩 Custom block
             </button>
+            ) : null}
           </div>
           <form
             className="flex gap-2"
@@ -724,7 +751,11 @@ export default function PageEditor({
           }}
           onClose={() => ed.select(null)}
           theme={theme}
-          onThemeChange={onThemeChange}
+          // Wave 2: the theme Animation Level select lives in EditPanel
+          // and only renders when onThemeChange is passed — Advanced only.
+          onThemeChange={advanced ? onThemeChange : undefined}
+          // Wave 2: per-section entrance/hover controls — Advanced only.
+          showAnimation={advanced}
         />
         <AiEditChat
           section={ed.selectedSection}

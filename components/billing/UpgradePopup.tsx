@@ -3,10 +3,14 @@
 //  - free user tries to create a 3rd project, or
 //  - free user tries Shopify export.
 // Demo only: the upgrade button flips a local flag — no payment, no Stripe.
+//
+// Wave 3 — light Wave 0 chrome (ui Button, slate text, indigo primary).
+// Behaviour and props unchanged.
 
 'use client';
 
 import { TEST_MODE_LABEL } from '../../lib/billing';
+import { Button } from '../ui/Button';
 
 interface UpgradePopupProps {
   open: boolean;
@@ -29,65 +33,27 @@ export default function UpgradePopup({
       role="dialog"
       aria-modal="true"
       aria-label="Upgrade required"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-        padding: 16,
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
       onClick={onClose}
     >
       <div
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          padding: 24,
-          maxWidth: 440,
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-        }}
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: 0 }}>Upgrade zaroori hai</h2>
-        <p style={{ margin: 0 }}>{reason}</p>
-        <p style={{ margin: 0, fontSize: 13, color: '#b45309' }}>
+        <h2 className="text-xl font-semibold text-slate-900">
+          Upgrade zaroori hai
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">{reason}</p>
+        <p className="mt-2 text-xs text-slate-500">
           {TEST_MODE_LABEL} — demo me upgrade karne par koi payment nahi hoti.
         </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: '10px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              cursor: 'pointer',
-            }}
-          >
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
             Baad me
-          </button>
-          <button
-            type="button"
-            onClick={onUpgradeDemo}
-            style={{
-              padding: '10px 16px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#111827',
-              color: '#fff',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-          >
+          </Button>
+          <Button type="button" variant="primary" onClick={onUpgradeDemo}>
             Demo me Monthly lo
-          </button>
+          </Button>
         </div>
       </div>
     </div>

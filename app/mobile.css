@@ -1,37 +1,29 @@
-/* app/mobile.css — mobile-usability pass (Cut C, foundational).
-   Small and scoped: touch targets, overflow guards, tap feedback and a
-   stacking helper. No redesign, no layout restructuring. Imported from
-   app/layout.tsx alongside globals.css. */
+/* app/mobile.css — Wave 0 mobile guards (beginner-first, phone-first).
+   The user reads this app on a 390px phone: every rule here must keep
+   the layout clean at that width. Imported from app/layout.tsx
+   alongside globals.css. No dark / pink styling anywhere. */
 
-/* Coarse pointers (touch screens): 44px minimum touch targets on
-   buttons / inputs / selects inside the editor and dashboard. */
-@media (pointer: coarse) {
-  .stb-mobile-stack button,
-  .stb-mobile-stack input,
-  .stb-mobile-stack select,
-  .stb-mobile-stack textarea,
-  [data-editor-root] button,
-  [data-editor-root] input,
-  [data-editor-root] select,
-  [data-editor-root] textarea {
-    min-height: 44px;
-  }
+/* Never allow horizontal page scroll; keep every container inside
+   the viewport. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
-/* Small screens: never allow horizontal page scroll; keep the preview
-   container inside the viewport. */
-@media (max-width: 768px) {
-  body {
-    overflow-x: hidden;
-  }
-  [data-page-preview],
-  [data-editor-root] {
-    max-width: 100vw;
-  }
-  /* Slightly larger base font for readability on phones. */
-  html {
-    font-size: 17px;
-  }
+/* 44px minimum touch targets on every interactive element in the
+   app chrome (editor + dashboard included). */
+button,
+input,
+select,
+textarea,
+[role="button"] {
+  min-height: 44px;
+}
+input,
+select,
+textarea {
+  font-size: 16px; /* stops iOS zooming into fields on focus */
 }
 
 /* Remove the grey tap flash on mobile browsers. */
@@ -39,12 +31,80 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Helper: force a block to stack its children vertically on small screens
-   (use on rows that would otherwise squeeze side-by-side). */
+/* Small screens (<=768px): mobile type + spacing. */
+@media (max-width: 768px) {
+  /* Hero 32px on mobile (40px desktop lives in globals.css). */
+  h1 {
+    font-size: 2rem; /* 32px */
+    line-height: 2.5rem; /* 40px */
+  }
+
+  /* Sections sit 48px apart on mobile (64–96px desktop). */
+  .stb-section {
+    padding-block: 3rem;
+  }
+
+  [data-page-preview],
+  [data-editor-root] {
+    max-width: 100vw;
+  }
+}
+
+/* Tables become stacked cards on small screens — never a cramped
+   table. Opt in with class="stb-table-stack" on the <table> and
+   data-label="Column name" on each <td> (later waves). */
+@media (max-width: 640px) {
+  table.stb-table-stack,
+  table.stb-table-stack tbody,
+  table.stb-table-stack tr,
+  table.stb-table-stack td {
+    display: block;
+    width: 100%;
+  }
+  table.stb-table-stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  table.stb-table-stack tr {
+    margin-bottom: 0.75rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 0.75rem 1rem;
+  }
+  table.stb-table-stack td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0;
+    border: 0;
+    text-align: right;
+    color: #0f172a;
+  }
+  table.stb-table-stack td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #475569;
+    text-align: left;
+  }
+}
+
+/* Helper: force a block to stack its children vertically on small
+   screens (use on rows that would otherwise squeeze side-by-side). */
 @media (max-width: 768px) {
   .stb-mobile-stack {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+  .stb-mobile-stack button,
+  .stb-mobile-stack input,
+  .stb-mobile-stack select,
+  .stb-mobile-stack textarea {
+    width: 100%;
   }
 }

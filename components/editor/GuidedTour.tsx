@@ -30,20 +30,20 @@ export interface GuidedTourProps {
 
 const STEPS: Array<{ title: string; body: string }> = [
   {
-    title: "Your store is ready — let’s walk through it",
-    body: "Your first theme is generated. This quick tour shows the three things that matter: editing a section, asking the AI, and exporting your theme.",
+    title: "Your store is ready — 4 steps me",
+    body: "Upar wizard dekho: 1 Prompt, 2 Plan, 3 Pages, 4 Export. Ye quick tour teen cheezein dikhata hai: section edit karna, AI se poochhna, aur theme export karna. Kisi bhi step par wapas jaane ke liye uspar click karo.",
   },
   {
     title: "1 · Hover a section to edit it",
-    body: "Move your mouse over any section in the preview — a small toolbar appears inside it. Move, duplicate, delete, or open it in the edit panel. Nothing is overwritten silently: AI edits always ask first.",
+    body: "Step 3 (Pages) me preview par kisi section par mouse le jao — uske andar hi ek chhota toolbar khulta hai. Move, duplicate, delete, ya edit panel kholo. AI edits hamesha pehle poochhte hain, chupke se kuch overwrite nahi hota.",
   },
   {
     title: "2 · Ask the AI to change one section",
-    body: "Pick a section, then tell the AI chat what to change — for example, “hero title Summer Sale rakho”. Review the proposal, then Accept or Discard. Every accepted edit saves a version you can restore.",
+    body: "Step 3 me ek section chuno, phir AI chat me likho kya badalna hai — jaise “hero title Summer Sale rakho”. Proposal review karo, phir Accept ya Discard. Har accepted edit ki version save ho jati hai.",
   },
   {
     title: "3 · Export your Shopify theme",
-    body: "When the preview looks right, hit Export Shopify Theme. You get a real theme zip to upload in Shopify (Online Store → Themes → Add theme → Upload zip). The export check warns you about placeholders first.",
+    body: "Jab preview theek lage, Step 4 (Export) par jao aur Export Shopify Theme dabao. Theme zip milega — Shopify me Online Store → Themes → Add theme → Upload zip se upload karo. Export check pehle placeholders ke baare me warn karta hai.",
   },
 ];
 
@@ -105,7 +105,7 @@ export default function GuidedTour({
                 flex: 1,
                 height: 4,
                 borderRadius: 999,
-                background: i <= step ? "#111827" : "#e5e7eb",
+                background: i <= step ? "#4F46E5" : "#e5e7eb",
               }}
             />
           ))}
@@ -166,7 +166,7 @@ export default function GuidedTour({
                 padding: "10px 16px",
                 borderRadius: 999,
                 border: "none",
-                background: "#111827",
+                background: "#4F46E5",
                 color: "#fff",
                 cursor: "pointer",
                 fontWeight: 600,
@@ -182,7 +182,7 @@ export default function GuidedTour({
                 padding: "10px 16px",
                 borderRadius: 999,
                 border: "none",
-                background: "#111827",
+                background: "#4F46E5",
                 color: "#fff",
                 cursor: "pointer",
                 fontWeight: 600,

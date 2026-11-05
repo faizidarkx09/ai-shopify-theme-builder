@@ -1,9 +1,14 @@
 // components/billing/PlanCard.tsx
 // One plan card on the billing page. "use client" is not needed here —
 // this is a pure presentational component; the page owns the state.
+//
+// Wave 3 — Wave 0 system (ui Card + Button), light chrome only.
+// TEST MODE is a small muted badge next to the price, never a large
+// coloured line. 3–4 short bullet benefits per card.
 
 import type { Plan } from '../../lib/billing';
-import { TEST_MODE_LABEL } from '../../lib/billing';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 
 interface PlanCardProps {
   plan: Plan;
@@ -20,66 +25,57 @@ export function formatPlanPrice(plan: Plan): string {
 
 export default function PlanCard({ plan, isCurrent, onSelect }: PlanCardProps) {
   return (
-    <div
-      style={{
-        border: isCurrent ? '2px solid #111827' : '1px solid #d1d5db',
-        borderRadius: 12,
-        padding: 20,
-        background: isCurrent ? '#f9fafb' : '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
+    <Card
+      className={
+        isCurrent ? 'border-indigo-600 ring-1 ring-indigo-600' : ''
+      }
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: 20 }}>{plan.name}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xl font-semibold text-slate-900">{plan.name}</h3>
         {isCurrent && (
-          <span
-            style={{
-              background: '#111827',
-              color: '#fff',
-              borderRadius: 999,
-              padding: '2px 10px',
-              fontSize: 12,
-            }}
-          >
+          <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
             Current plan
           </span>
         )}
       </div>
 
-      <p style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{formatPlanPrice(plan)}</p>
-      {plan.priceUsd > 0 && (
-        <p style={{ margin: 0, fontSize: 12, color: '#b45309' }}>{TEST_MODE_LABEL}</p>
-      )}
+      <p className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-2xl font-bold text-slate-900">
+          {formatPlanPrice(plan)}
+        </span>
+        {plan.priceUsd > 0 && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+            TEST MODE
+          </span>
+        )}
+      </p>
 
-      <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
-        {plan.features.map((feature) => (
-          <li key={feature}>{feature}</li>
+      <ul className="mt-4 grid gap-2 text-sm text-slate-600">
+        {plan.features.slice(0, 4).map((feature) => (
+          <li key={feature} className="flex gap-2">
+            <span aria-hidden className="text-indigo-600">
+              ✓
+            </span>
+            <span>{feature}</span>
+          </li>
         ))}
       </ul>
 
-      <button
+      <Button
         type="button"
+        variant={
+          isCurrent || plan.id === 'free' ? 'ghost' : 'primary'
+        }
         disabled={isCurrent}
         onClick={() => onSelect(plan.id)}
-        style={{
-          marginTop: 'auto',
-          padding: '10px 16px',
-          borderRadius: 8,
-          border: 'none',
-          background: isCurrent ? '#9ca3af' : '#111827',
-          color: '#fff',
-          cursor: isCurrent ? 'default' : 'pointer',
-          fontWeight: 600,
-        }}
+        className="mt-5 w-full"
       >
         {isCurrent
           ? 'Ye plan active hai'
           : plan.id === 'free'
             ? 'Free par wapas jao (demo)'
-            : `${plan.name} plan lo — demo, koi payment nahi`}
-      </button>
-    </div>
+            : 'Monthly lo — demo, koi payment nahi'}
+      </Button>
+    </Card>
   );
 }

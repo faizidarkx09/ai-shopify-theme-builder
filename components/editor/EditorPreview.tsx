@@ -72,6 +72,17 @@ export interface EditorPreviewProps {
   } | null;
   onCommentProposalAccept?: (commentId: string) => void;
   onCommentProposalDiscard?: (commentId: string) => void;
+  /**
+   * Wave 2 — Advanced mode (editor page's Advanced toggle). Forwarded
+   * to PageEditor: gates the Custom Block entry + EditPanel animation
+   * controls. When false the comment toggle below is hidden too and the
+   * parent forces commentMode off, so no pins render in beginner mode.
+   */
+  advanced?: boolean;
+  /** Wave 2 — bump to open the Custom Block modal from the Advanced drawer. */
+  openCustomBlockSignal?: number;
+  /** Wave 2 — hide the Comment Mode toggle (beginner mode). */
+  hideCommentToggle?: boolean;
 }
 
 function SectionView({
@@ -95,7 +106,7 @@ function SectionView({
     <section
       onClick={onSelect}
       className={`cursor-pointer ${align} ${
-        selected ? "ring-2 ring-pink-500 ring-inset" : ""
+        selected ? "ring-2 ring-indigo-500 ring-inset" : ""
       }`}
       style={{
         backgroundColor: section.bgColor ?? theme.colors.background,
@@ -155,6 +166,9 @@ export default function EditorPreview({
   commentProposal,
   onCommentProposalAccept,
   onCommentProposalDiscard,
+  advanced = false,
+  openCustomBlockSignal = 0,
+  hideCommentToggle = false,
 }: EditorPreviewProps) {
   const previewSections =
     streamingSections.length > 0
@@ -207,11 +221,13 @@ export default function EditorPreview({
 
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-4 dark:bg-zinc-900">
-      {/* Cut C #25 — preview header with the Comment Mode toggle. */}
+      {/* Cut C #25 — preview header with the Comment Mode toggle.
+          Wave 2: hidden in beginner mode (hideCommentToggle). */}
       <div className="mx-auto mb-2 flex w-full max-w-4xl items-center justify-between">
         <span className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
           Preview
         </span>
+        {hideCommentToggle ? null : (
         <button
           type="button"
           onClick={toggleCommentMode}
@@ -219,12 +235,13 @@ export default function EditorPreview({
           title="Comment mode: click the preview to drop a pin + note"
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
             modeOn
-              ? "bg-pink-600 text-white hover:bg-pink-700"
-              : "border border-zinc-300 text-zinc-600 hover:border-pink-500 hover:text-pink-600 dark:border-zinc-700 dark:text-zinc-400"
+              ? "bg-indigo-600 text-white hover:bg-indigo-700"
+              : "border border-zinc-300 text-zinc-600 hover:border-indigo-500 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400"
           }`}
         >
           💬 Comment{modeOn ? " on" : ""}
         </button>
+        )}
       </div>
 
       {/* Note input for a freshly dropped pin. */}
@@ -238,11 +255,11 @@ export default function EditorPreview({
             onChange={(e) => setPinNote(e.target.value)}
             placeholder={`Note at ${Math.round(pendingPin.xPct)}%, ${Math.round(pendingPin.yPct)}%…`}
             autoFocus
-            className="flex-1 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="flex-1 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
           <button
             type="submit"
-            className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700"
+            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             Add note
           </button>
@@ -306,6 +323,8 @@ export default function EditorPreview({
             commentProposal={commentProposal}
             onCommentProposalAccept={onCommentProposalAccept}
             onCommentProposalDiscard={onCommentProposalDiscard}
+            advanced={advanced}
+            openCustomBlockSignal={openCustomBlockSignal}
           />
         ) : (
           <div className="p-12 text-center text-zinc-500">
@@ -342,8 +361,8 @@ export default function EditorPreview({
                   c.status === "done"
                     ? "bg-zinc-400"
                     : selectedCommentId === c.id
-                      ? "bg-pink-700 ring-2 ring-white"
-                      : "bg-pink-600"
+                      ? "bg-indigo-700 ring-2 ring-white"
+                      : "bg-indigo-600"
                 }`}
               >
                 {c.status === "done" ? "✓" : i + 1}
@@ -351,7 +370,7 @@ export default function EditorPreview({
             ))}
             {pendingPin && (
               <span
-                className="pointer-events-none absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-pink-700 text-xs font-bold text-white shadow ring-2 ring-white"
+                className="pointer-events-none absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-indigo-700 text-xs font-bold text-white shadow ring-2 ring-white"
                 style={{ left: `${pendingPin.xPct}%`, top: `${pendingPin.yPct}%` }}
               >
                 ?

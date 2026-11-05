@@ -1,153 +1,97 @@
-// components/editor/EditorTopBar.tsx — Wave 0 split of app/editor/[projectId]/page.tsx.
-// Top bar ONLY: project name + theme badge + page tabs + +Page button +
-// Desktop/Mobile toggle + Export buttons. No state lives here — the editor
-// page owns all state and passes it down as props.
-//
-// Cut A #6: the old "Export ▾" dropdown is gone. Both export buttons now
-// open the ExportModal (pre-export audit + Shopify hero + deploy guide);
-// the modal, not this bar, owns the format choice and the billing gate.
+// components/editor/EditorTopBar.tsx — Wave 2 rewrite (beginner-first).
+// Top bar ONLY, decluttered: back button + project name + the wizard
+// Stepper + ONE Advanced switch + ONE primary Export button. Nothing
+// else lives here in beginner mode:
+//   - page tabs + Desktop/Tablet/Mobile view toggle + "+ Page" moved to
+//     the slim Step-3 bar in the editor page (they belong to editing).
+//   - Credit meter, Polish, Variant B moved into the Advanced drawer.
+//   - the old duplicate "Export ▾" button is gone (Cut A #6 already
+//     removed the dropdown; this removes the leftover second button).
+// Light chrome only (Wave 0 tokens): white, slate, ONE indigo accent.
+"use client";
 
-import type { Page } from "@/lib/types";
+import Link from "next/link";
+import { Button } from "@/components/ui";
+import { WizardStepper } from "./WizardSteps";
 
-export type ExportFormat = "shopify" | "code" | "png";
 /** Cut B #15: desktop / tablet (768px) / mobile (390px). */
 export type ViewMode = "desktop" | "tablet" | "mobile";
 
 export interface EditorTopBarProps {
   projectName: string;
-  themeName: string;
-  themeStyle: string;
-  pages: Page[];
-  activePageId: string | null;
-  onSelectPage: (pageId: string) => void;
-  onAddPage: () => void;
-  view: ViewMode;
-  onViewChange: (view: ViewMode) => void;
+  /** 0-based wizard step (Prompt / Plan / Pages / Export). */
+  currentStep: number;
+  canGoToStep: (step: number) => boolean;
+  onStepClick: (step: number) => void;
+  /** The single Advanced switch — off by default (beginner mode). */
+  advanced: boolean;
+  onAdvancedChange: (on: boolean) => void;
   /** Open the ExportModal (audit + export hero + deploy guide). */
   onOpenExport: () => void;
   exporting: boolean;
   exportDisabled: boolean;
-  /** Cut C #24: duplicate the ACTIVE page as Variant B (integrator wires
-   *  this to lib/variants.ts duplicatePageAsVariant). Hidden when absent. */
-  onDuplicateVariant?: (pageId: string) => void;
-  /** Cut C #30: one-click Polish pass (integrator wires to lib/polish.ts). */
-  onPolish?: () => void;
-  polishing?: boolean;
 }
 
 export default function EditorTopBar({
   projectName,
-  themeName,
-  themeStyle,
-  pages,
-  activePageId,
-  onSelectPage,
-  onAddPage,
-  view,
-  onViewChange,
+  currentStep,
+  canGoToStep,
+  onStepClick,
+  advanced,
+  onAdvancedChange,
   onOpenExport,
   exporting,
   exportDisabled,
-  onDuplicateVariant,
-  onPolish,
-  polishing = false,
 }: EditorTopBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-      <span className="max-w-48 truncate font-semibold">{projectName}</span>
-      <span
-        className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-        title={themeStyle}
-      >
-        {themeName}
-      </span>
-      <div className="flex items-center gap-1 overflow-x-auto">
-        {pages.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onSelectPage(p.id)}
-            className={`rounded-t-lg border-b-2 px-3 py-1.5 text-sm whitespace-nowrap ${
-              p.id === activePageId
-                ? "border-pink-600 font-semibold text-pink-600"
-                : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            }`}
-          >
-            {p.title}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={onAddPage}
-          className="rounded-full border border-dashed border-zinc-400 px-3 py-1 text-sm text-zinc-500 hover:border-pink-500 hover:text-pink-600"
+    <header className="border-b border-border bg-page px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/dashboard"
+          className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-body hover:bg-panel hover:text-ink"
         >
-          + Page
-        </button>
-        {/* Cut C #24 — duplicate the active page as Variant B. */}
-        {onDuplicateVariant && activePageId ? (
-          <button
-            type="button"
-            onClick={() => onDuplicateVariant(activePageId)}
-            title="Duplicate this page as Variant B with one AI-suggested headline change"
-            className="rounded-full border border-violet-400 px-3 py-1 text-sm text-violet-600 hover:bg-violet-50"
+          ← Dashboard
+        </Link>
+        <span className="max-w-48 truncate text-sm font-semibold text-ink">
+          {projectName}
+        </span>
+        <div className="ml-auto flex items-center gap-3">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink">
+            <span>Advanced</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={advanced}
+              aria-label="Advanced settings dikhao ya chhupao"
+              onClick={() => onAdvancedChange(!advanced)}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                advanced ? "bg-accent" : "bg-slate-300"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  advanced ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </label>
+          <Button
+            size="sm"
+            onClick={onOpenExport}
+            disabled={exporting || exportDisabled}
           >
-            Duplicate as Variant B
-          </button>
-        ) : null}
-      </div>
-      <div className="ml-auto flex items-center gap-2">
-        <div className="flex rounded-full border border-zinc-300 text-sm dark:border-zinc-700">
-          <button
-            type="button"
-            onClick={() => onViewChange("desktop")}
-            className={`rounded-full px-3 py-1 ${view === "desktop" ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : ""}`}
-          >
-            Desktop
-          </button>
-          <button
-            type="button"
-            onClick={() => onViewChange("tablet")}
-            className={`rounded-full px-3 py-1 ${view === "tablet" ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : ""}`}
-          >
-            Tablet
-          </button>
-          <button
-            type="button"
-            onClick={() => onViewChange("mobile")}
-            className={`rounded-full px-3 py-1 ${view === "mobile" ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : ""}`}
-          >
-            Mobile
-          </button>
+            {exporting ? "Export…" : "Export Shopify Theme"}
+          </Button>
         </div>
-        {/* Cut C #30 — one-click Polish pass (alt text, contrast, spacing). */}
-        {onPolish ? (
-          <button
-            type="button"
-            onClick={onPolish}
-            disabled={polishing || exportDisabled}
-            title="Polish this page: fix alt text, low contrast and spacing"
-            className="rounded-full border border-emerald-500 px-4 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-          >
-            {polishing ? "Polishing…" : "✨ Polish"}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onOpenExport}
-          disabled={exporting || exportDisabled}
-          className="rounded-full bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-        >
-          {exporting ? "Export…" : "Export Shopify Theme"}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenExport}
-          disabled={exporting || exportDisabled}
-          className="rounded-full bg-pink-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
-        >
-          {exporting ? "Export…" : "Export ▾"}
-        </button>
       </div>
-    </div>
+      <div className="mt-3">
+        <WizardStepper
+          current={currentStep}
+          canGoTo={canGoToStep}
+          onStepClick={onStepClick}
+        />
+      </div>
+    </header>
   );
 }

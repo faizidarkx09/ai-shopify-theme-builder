@@ -9,7 +9,6 @@
 // section select/highlight hota hai.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getProjectStore } from "@/lib/db/store";
 import EditorTopBar, { type ViewMode } from "@/components/editor/EditorTopBar";
@@ -17,6 +16,9 @@ import EditorChat from "@/components/editor/EditorChat";
 import EditorPreview from "@/components/editor/EditorPreview";
 import PlanApproval from "@/components/editor/PlanApproval";
 import ExportModal from "@/components/editor/ExportModal";
+import AdvancedPanel from "@/components/editor/AdvancedPanel";
+import { deriveWizardStep } from "@/components/editor/WizardSteps";
+import { Button, Card, EmptyState } from "@/components/ui";
 import ThemeTokensPanel from "@/components/editor/ThemeTokensPanel";
 import BrandKitPanel from "@/components/editor/BrandKitPanel";
 import CreditMeter from "@/components/editor/CreditMeter";
@@ -254,11 +256,15 @@ export default function EditorPage() {
   // ref too so the plan-gate call never reads a stale closure.
   const [referenceUrl, setReferenceUrl] = useState("");
   const referenceUrlRef = useRef("");
-  // Cut B #11/#13/#20 — right-side tabbed panel.
-  // Cut C adds Funnel | Comments | Products tabs (same panel).
-  const [rightTab, setRightTab] = useState<
-    "sections" | "seo" | "media" | "funnel" | "comments" | "products"
-  >("sections");
+  // Wave 2 — guided wizard + progressive disclosure (beginner mode
+  // DEFAULT). `advanced` is the ONE toggle in the top bar: OFF = only
+  // the current step's essentials render; ON = the Advanced drawer
+  // (one tidy panel) shows every advanced feature. `manualStep` is the
+  // user's clicked step; null = derive it from project state.
+  const [advanced, setAdvanced] = useState(false);
+  const [manualStep, setManualStep] = useState<number | null>(null);
+  // Wave 2 — bump to open the Custom Block modal from the Advanced drawer.
+  const [customBlockSignal, setCustomBlockSignal] = useState(0);
   // Cut C #24 — Variant B notice + pre-publish checklist.
   const [variantNotice, setVariantNotice] = useState("");
   const [variantChecklist, setVariantChecklist] = useState<ChecklistItem[] | null>(null);
@@ -354,6 +360,30 @@ export default function EditorPage() {
   const activePage: Page | null =
     project?.pages.find((p) => p.id === activePageId) ?? null;
 
+  // Wave 2 — wizard step: manual click wins, otherwise derive it from
+  // project state (Prompt -> Plan -> Pages; Export only by clicking).
+  // A state transition (plan arrives / pages are built) clears the
+  // manual override so the wizard follows the project forward.
+  const derivedStep = deriveWizardStep({
+    hasPages: (project?.pages.length ?? 0) > 0,
+    planPending: plan !== null && !planApproved,
+    planLoading,
+    generating,
+  });
+  const wizardStep = manualStep ?? derivedStep;
+  useEffect(() => {
+    setManualStep(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, project?.pages.length]);
+  function canGoToStep(step: number): boolean {
+    const hasPages = (project?.pages.length ?? 0) > 0;
+    if (step === 0) return true;
+    if (step === 1) return plan !== null || planLoading || hasPages;
+    if (step === 2) return hasPages || generating;
+    if (step === 3) return hasPages;
+    return false;
+  }
+
   function saveProject(patch: Partial<Project>) {
     if (!project) return;
     const updated = getProjectStore().update(project.id, patch);
@@ -405,11 +435,12 @@ export default function EditorPage() {
     if (updated) setProject(updated as Project);
   }
 
-  // Cut A #3 — audit is computed when the export modal opens.
+  // Cut A #3 — audit is computed whenever a page exists, so the Step-4
+  // (Export) wizard view can show its summary without opening the modal.
   const exportAudit = useMemo(() => {
-    if (!exportOpen || !project || !activePage) return null;
+    if (!project || !activePage) return null;
     return auditProject(project, activePage);
-  }, [exportOpen, project, activePage]);
+  }, [project, activePage]);
 
   // Cut A #3 — one-click audit fix: apply to the active page and persist.
   // Cut B lag fix — PageEditor holds its own section state AND a
@@ -656,7 +687,6 @@ export default function EditorPage() {
     setStatus(
       `${products.length} real product${products.length === 1 ? "" : "s"} import ho gaye — next generation me demo catalog ki jagah ye use honge.`,
     );
-    setRightTab("sections");
   }
 
   // INTEGRATION (Agent 3 PageEditor -> Agent 5 store): sections change hone
@@ -1200,44 +1230,34 @@ export default function EditorPage() {
   if (notFound) {
     return (
       <div className="mx-auto max-w-xl flex-1 px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Project nahi mila</h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <h1 className="text-2xl font-bold text-ink">Project nahi mila</h1>
+        <p className="mt-2 text-body">
           Ye project id localStorage me nahi hai. Dashboard se dobara kholo.
         </p>
-        <Link
-          href="/dashboard"
-          className="mt-6 inline-block rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white dark:bg-white dark:text-zinc-900"
-        >
-          Dashboard wapas jao
-        </Link>
+        <div className="mt-6 flex justify-center">
+          <Button href="/dashboard">Dashboard wapas jao</Button>
+        </div>
       </div>
     );
   }
 
   if (!project) {
-    return <p className="flex-1 px-4 py-16 text-center text-zinc-500">Loading…</p>;
+    return <p className="flex-1 px-4 py-16 text-center text-body">Loading…</p>;
   }
 
+  const hasPages = project.pages.length > 0;
+  const auditErrors = exportAudit?.issues.filter((i) => i.severity === "error").length ?? 0;
+  const auditWarnings = exportAudit?.issues.filter((i) => i.severity === "warning").length ?? 0;
+
   return (
-    <div className="flex h-[calc(100vh-121px)] flex-1 flex-col">
+    <div className="flex h-[calc(100vh-121px)] flex-1 flex-col bg-page">
       <EditorTopBar
         projectName={project.name}
-        themeName={project.theme.name}
-        themeStyle={project.theme.style}
-        pages={project.pages}
-        activePageId={activePageId}
-        onSelectPage={(id) => {
-          setActivePageId(id);
-          setStreamingSections([]);
-        }}
-        onAddPage={() => {
-          // + Page quick action: pre-fill + legacy direct generate (no plan gate).
-          quickPageRef.current = true;
-          setPrompt("Generate product detail page");
-          inputRef.current?.focus();
-        }}
-        view={view}
-        onViewChange={setView}
+        currentStep={wizardStep}
+        canGoToStep={canGoToStep}
+        onStepClick={(step) => setManualStep(step)}
+        advanced={advanced}
+        onAdvancedChange={setAdvanced}
         onOpenExport={() => {
           setJustDownloaded(false);
           setExportMsg("");
@@ -1245,30 +1265,25 @@ export default function EditorPage() {
         }}
         exporting={exporting}
         exportDisabled={!activePage}
-        onDuplicateVariant={handleDuplicateVariant}
-        onPolish={handlePolish}
-        polishing={polishing}
       />
 
       {/* Cut C #24 — Variant B suggestion + pre-publish checklist. */}
       {variantNotice || variantChecklist ? (
-        <div className="border-b border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-900 dark:bg-violet-950">
+        <div className="border-b border-indigo-200 bg-indigo-50 px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+              <p className="text-sm font-semibold text-indigo-900">
                 Variant B ready hai
               </p>
               {variantNotice ? (
-                <p className="mt-0.5 text-sm text-violet-800 dark:text-violet-200">
-                  {variantNotice}
-                </p>
+                <p className="mt-0.5 text-sm text-indigo-800">{variantNotice}</p>
               ) : null}
               {variantChecklist ? (
                 <ul className="mt-2 space-y-1">
                   {variantChecklist.map((item) => (
                     <li
                       key={item.item}
-                      className="flex items-center gap-2 text-sm text-violet-900 dark:text-violet-100"
+                      className="flex items-center gap-2 text-sm text-indigo-900"
                     >
                       <span aria-hidden>{item.done ? "✓" : "○"}</span>
                       <span className={item.done ? "" : "opacity-70"}>
@@ -1285,7 +1300,7 @@ export default function EditorPage() {
                 setVariantNotice("");
                 setVariantChecklist(null);
               }}
-              className="rounded-full border border-violet-300 px-3 py-1 text-xs font-semibold text-violet-800 hover:bg-white dark:border-violet-700 dark:text-violet-200"
+              className="rounded-full border border-indigo-300 px-3 py-1 text-xs font-semibold text-indigo-800 hover:bg-white"
             >
               Dismiss
             </button>
@@ -1295,17 +1310,17 @@ export default function EditorPage() {
 
       {/* Cut C #30 — Polish fixes applied. */}
       {polishFixes ? (
-        <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950">
+        <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+              <p className="text-sm font-semibold text-emerald-900">
                 Polish —{" "}
                 {polishFixes.length === 0
                   ? "koi fix zaroori nahi tha"
                   : `${polishFixes.length} fix${polishFixes.length === 1 ? "" : "es"} lag gaye`}
               </p>
               {polishFixes.length > 0 ? (
-                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-emerald-900">
                   {polishFixes.map((f) => (
                     <li key={f.id}>{f.message}</li>
                   ))}
@@ -1315,7 +1330,7 @@ export default function EditorPage() {
             <button
               type="button"
               onClick={() => setPolishFixes(null)}
-              className="rounded-full border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-800 hover:bg-white dark:border-emerald-700 dark:text-emerald-200"
+              className="rounded-full border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-800 hover:bg-white"
             >
               Dismiss
             </button>
@@ -1325,13 +1340,13 @@ export default function EditorPage() {
 
       {/* Cut C #25 — comment-apply error (proposal itself is staged in PageEditor). */}
       {commentError ? (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
             <span>{commentError}</span>
             <button
               type="button"
               onClick={() => setCommentError("")}
-              className="rounded-full border border-red-300 px-3 py-1 text-xs font-semibold hover:bg-white dark:border-red-700"
+              className="rounded-full border border-red-300 px-3 py-1 text-xs font-semibold hover:bg-white"
             >
               Dismiss
             </button>
@@ -1339,198 +1354,391 @@ export default function EditorPage() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <EditorChat
-          projectPrompt={project.prompt}
-          messages={project.messages}
-          generating={generating || planLoading}
-          status={status}
-          error={error}
-          exportMsg={exportMsg}
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          onSubmit={generate}
-          inputRef={inputRef}
-          onReferenceUrl={(url) => {
-            setReferenceUrl(url);
-            referenceUrlRef.current = url;
-          }}
-          themeTokens={
-            <ThemeTokensPanel
-              theme={project.theme}
-              onThemeChange={(theme) => saveProject({ theme })}
-              presets={THEME_PRESETS}
-            />
-          }
-          brandKitPanel={
-            <BrandKitPanel
-              brandKit={project.brandKit}
-              onBrandKitChange={(kit) => saveProject({ brandKit: kit })}
-              onReadFromUrl={handleReadBrandFromUrl}
-            />
-          }
-          creditMeter={<CreditMeter project={project} />}
-        />
-
-        {plan && !planApproved ? (
-          <section className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-4 dark:bg-zinc-900">
-            <div className="mx-auto max-w-3xl">
-              {planReference &&
-              (planReference.title || planReference.nicheHint) ? (
-                <p className="mb-3 rounded-xl bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm dark:bg-zinc-950 dark:text-zinc-400">
-                  Reference: {planReference.title ?? planReference.nicheHint}
-                  {planReference.accent
-                    ? ` · accent ${planReference.accent}`
-                    : ""}
-                </p>
-              ) : null}
-              <PlanApproval
-                plan={plan}
-                onPlanChange={setPlan}
-                onApprove={() => void approvePlan()}
-                onCancel={() => {
-                  setPlan(null);
-                  setPlanReference(null);
-                  setStatus("");
-                }}
-                generating={generating}
-              />
-            </div>
-          </section>
-        ) : (
-          <EditorPreview
-            view={view}
-            theme={project.theme}
-            generating={generating || funnelBusy}
-            status={status}
-            streamingSections={streamingSections}
-            activePage={activePage}
-            projectId={project.id}
-            selectedSectionId={selectedSectionId}
-            onSelectSection={setSelectedSectionId}
-            onSectionsChange={handleSectionsChange}
-            project={project}
-            onProjectChange={handleProjectChange}
-            clearDirtySignal={clearDirtySignal}
-            remountKey={previewRemountKey}
-            // Cut C #22 — Animation Level select persists via saveProject.
-            onThemeChange={(theme) => saveProject({ theme })}
-            // Cut C #25 — Comment Mode pins + staged apply.
-            commentMode={commentMode}
-            onCommentModeChange={setCommentMode}
-            comments={project.comments ?? []}
-            onAddComment={handleAddComment}
-            selectedCommentId={selectedCommentId}
-            onSelectComment={setSelectedCommentId}
-            commentProposal={commentProposal}
-            onCommentProposalAccept={handleCommentProposalAccept}
-            onCommentProposalDiscard={handleCommentProposalDiscard}
-          />
-        )}
-
-        {/* Cut B #11/#13/#20 — right-side tabbed panel: Sections | SEO | Media.
-            Cut C adds Funnel | Comments | Products tabs (same panel). */}
-        <aside className="max-h-[45vh] w-full shrink-0 overflow-y-auto border-t border-zinc-200 md:max-h-none md:min-h-0 md:w-80 md:border-t-0 md:border-l dark:border-zinc-800">
-          <div className="flex flex-wrap gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
-            {(
-              [
-                { id: "sections", label: "Sections" },
-                { id: "seo", label: "SEO" },
-                { id: "media", label: "Media" },
-                { id: "funnel", label: "Funnel" },
-                { id: "comments", label: "Comments" },
-                { id: "products", label: "Products" },
-              ] as const
-            ).map((tab) => (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* ---- Step 3 only: slim page bar (page tabs + view toggle + + Page).
+            The top bar stays decluttered — these belong to editing. ---- */}
+        {wizardStep === 2 ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-page px-4 py-2">
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {project.pages.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setActivePageId(p.id);
+                    setStreamingSections([]);
+                  }}
+                  aria-current={p.id === activePageId ? "page" : undefined}
+                  className={`rounded-full px-3 py-1.5 text-sm whitespace-nowrap ${
+                    p.id === activePageId
+                      ? "bg-accent-soft font-semibold text-accent-text"
+                      : "text-body hover:text-ink"
+                  }`}
+                >
+                  {p.title}
+                </button>
+              ))}
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setRightTab(tab.id)}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                  rightTab === tab.id
-                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                }`}
-              >
-                {tab.label}
-                {tab.id === "comments" &&
-                pageComments.some((c) => c.status === "open")
-                  ? ` (${pageComments.filter((c) => c.status === "open").length})`
-                  : ""}
-              </button>
-            ))}
-          </div>
-          <div className="space-y-4 p-4">
-            {rightTab === "sections" ? (
-              <SectionLibrary
-                theme={project.theme}
-                products={project.csvProducts}
-                onInsert={handleLibraryInsert}
-                onSwap={handleLibrarySwap}
-                selectedSectionType={
-                  activePage?.sections.find(
-                    (s) => s.id === selectedSectionId,
-                  )?.type
-                }
-              />
-            ) : null}
-            {rightTab === "seo" && activePage ? (
-              <SeoPanel page={activePage} onSeoChange={handleSeoChange} />
-            ) : null}
-            {rightTab === "seo" && !activePage ? (
-              <p className="text-sm text-zinc-500">
-                Pehle ek page generate karo — phir uski SEO yahan dikhegi.
-              </p>
-            ) : null}
-            {rightTab === "media" ? (
-              <MediaLibrary
-                project={project}
-                onApplyImage={handleApplyImage}
-                onRegenerateImage={handleRegenerateImage}
-                selectedSectionId={selectedSectionId}
-              />
-            ) : null}
-            {rightTab === "funnel" ? (
-              <FunnelView
-                project={project}
-                onSelectPage={(id) => {
-                  setActivePageId(id);
-                  setStreamingSections([]);
+                onClick={() => {
+                  // + Page quick action: pre-fill + legacy direct generate (no plan gate).
+                  quickPageRef.current = true;
+                  setPrompt("Generate product detail page");
+                  inputRef.current?.focus();
                 }}
-                onGenerateFunnelPage={(step) => void handleGenerateFunnelPage(step)}
-                onReorder={(pageIds) => saveProject({ funnelOrder: pageIds })}
-              />
-            ) : null}
-            {rightTab === "comments" ? (
-              <div className="space-y-3">
-                <CommentsPanel
-                  comments={pageComments}
-                  onAddComment={handleAddComment}
-                  onResolveComment={handleResolveComment}
-                  onApplyAll={handleApplyAllComments}
-                  pageId={activePage?.id}
-                />
-                {commentBusy ? (
-                  <p className="text-xs text-zinc-500">
-                    Comment apply ho raha hai — proposal review box me aayega…
-                  </p>
-                ) : null}
-                {commentProposal ? (
-                  <p className="rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:bg-violet-950 dark:text-violet-100">
-                    Comment proposal review box me hai — Accept karo to comment
-                    resolve hoga, Discard karo to agla comment aayega.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-            {rightTab === "products" ? (
-              <CsvImport
-                onImport={handleCsvImport}
-                existingCount={project.csvProducts?.length ?? 0}
-              />
-            ) : null}
+                className="rounded-full border border-dashed border-border px-3 py-1 text-sm text-body hover:border-accent hover:text-accent"
+              >
+                + Page
+              </button>
+            </div>
+            <div className="ml-auto flex rounded-full border border-border text-sm">
+              {(["desktop", "tablet", "mobile"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded-full px-3 py-1 capitalize ${
+                    view === v ? "bg-indigo-600 text-white" : "text-body"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </div>
-        </aside>
+        ) : null}
+
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          {/* ================= Step 1 — Prompt ================= */}
+          {wizardStep === 0 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto bg-panel p-4">
+              <div className="mx-auto max-w-2xl">
+                {hasPages ? (
+                  <p className="mb-3 text-center text-sm text-body">
+                    Pehle se {project.pages.length} page
+                    {project.pages.length === 1 ? "" : "s"} hain — naya prompt
+                    naya plan banayega.
+                  </p>
+                ) : null}
+                <Card padding="none" className="overflow-hidden">
+                  <EditorChat
+                    variant="step"
+                    showIntro
+                    submitLabel="Generate"
+                    projectPrompt={project.prompt}
+                    messages={project.messages}
+                    generating={generating || planLoading}
+                    status={status}
+                    error={error}
+                    exportMsg={exportMsg}
+                    prompt={prompt}
+                    onPromptChange={setPrompt}
+                    onSubmit={generate}
+                    inputRef={inputRef}
+                    onReferenceUrl={(url) => {
+                      setReferenceUrl(url);
+                      referenceUrlRef.current = url;
+                    }}
+                  />
+                </Card>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ================= Step 2 — Plan ================= */}
+          {wizardStep === 1 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto bg-panel p-4">
+              <div className="mx-auto max-w-3xl">
+                {plan && !planApproved ? (
+                  <>
+                    {planReference &&
+                    (planReference.title || planReference.nicheHint) ? (
+                      <p className="mb-3 rounded-xl bg-white px-4 py-2 text-sm text-body shadow-sm">
+                        Reference: {planReference.title ?? planReference.nicheHint}
+                        {planReference.accent
+                          ? ` · accent ${planReference.accent}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    <PlanApproval
+                      plan={plan}
+                      onPlanChange={setPlan}
+                      onApprove={() => void approvePlan()}
+                      onCancel={() => {
+                        setPlan(null);
+                        setPlanReference(null);
+                        setStatus("");
+                      }}
+                      generating={generating}
+                    />
+                  </>
+                ) : planLoading ? (
+                  <Card>
+                    <p className="text-lg font-semibold text-ink">
+                      Plan ban raha hai…
+                    </p>
+                    <p className="mt-1 text-sm text-body">
+                      {status ||
+                        "Theme aur pages check ho rahe hain — thoda sabar karo."}
+                    </p>
+                  </Card>
+                ) : (
+                  <EmptyState
+                    title="Plan yahan dikhega"
+                    message="Pehle Step 1 me apna store ek jumle me likho, phir Generate dabao — AI plan banayega."
+                    action={
+                      <Button
+                        variant="ghost"
+                        onClick={() => setManualStep(0)}
+                      >
+                        Step 1 par jao
+                      </Button>
+                    }
+                  />
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ================= Step 3 — Pages (core edit loop) ================= */}
+          {wizardStep === 2 ? (
+            <>
+              <EditorChat
+                projectPrompt={project.prompt}
+                messages={project.messages}
+                generating={generating || planLoading}
+                status={status}
+                error={error}
+                exportMsg={exportMsg}
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                onSubmit={generate}
+                inputRef={inputRef}
+                onReferenceUrl={(url) => {
+                  setReferenceUrl(url);
+                  referenceUrlRef.current = url;
+                }}
+              />
+              <EditorPreview
+                view={view}
+                theme={project.theme}
+                generating={generating || funnelBusy}
+                status={status}
+                streamingSections={streamingSections}
+                activePage={activePage}
+                projectId={project.id}
+                selectedSectionId={selectedSectionId}
+                onSelectSection={setSelectedSectionId}
+                onSectionsChange={handleSectionsChange}
+                project={project}
+                onProjectChange={handleProjectChange}
+                clearDirtySignal={clearDirtySignal}
+                remountKey={previewRemountKey}
+                onThemeChange={(theme) => saveProject({ theme })}
+                // Cut C #25 — Comment Mode pins: Advanced only.
+                commentMode={advanced ? commentMode : false}
+                onCommentModeChange={setCommentMode}
+                comments={project.comments ?? []}
+                onAddComment={handleAddComment}
+                selectedCommentId={selectedCommentId}
+                onSelectComment={setSelectedCommentId}
+                commentProposal={commentProposal}
+                onCommentProposalAccept={handleCommentProposalAccept}
+                onCommentProposalDiscard={handleCommentProposalDiscard}
+                advanced={advanced}
+                openCustomBlockSignal={customBlockSignal}
+                hideCommentToggle={!advanced}
+              />
+            </>
+          ) : null}
+
+          {/* ================= Step 4 — Export ================= */}
+          {wizardStep === 3 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto bg-panel p-4">
+              <div className="mx-auto max-w-2xl space-y-4">
+                {activePage && exportAudit ? (
+                  <Card
+                    title="Export karo — theme ready hai"
+                    description={`${project.name} — “${activePage.title}” · ${activePage.sections.length} sections · ${project.pages.length} pages`}
+                  >
+                    <p className="text-sm text-body">
+                      Export check score:{" "}
+                      <span className="font-semibold text-ink">
+                        {exportAudit.score}/100
+                      </span>{" "}
+                      · {auditErrors} errors · {auditWarnings} warnings
+                      {exportAudit.issues.length === 0
+                        ? " — koi issue nahi, seedha export karo."
+                        : " — neeche issues fix karo ya seedha export karo."}
+                    </p>
+                    {exportAudit.issues.length > 0 ? (
+                      <ul className="mt-3 space-y-2">
+                        {exportAudit.issues.slice(0, 5).map((issue) => (
+                          <li
+                            key={issue.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-sm"
+                          >
+                            <span className="text-body">{issue.message}</span>
+                            {issue.fix ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleApplyFix(issue.fix as AuditFix)}
+                              >
+                                Fix
+                              </Button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <div className="mt-5">
+                      <Button
+                        onClick={() => {
+                          setJustDownloaded(false);
+                          setExportMsg("");
+                          setExportOpen(true);
+                        }}
+                        disabled={exporting}
+                      >
+                        {exporting ? "Export…" : "Export Shopify Theme"}
+                      </Button>
+                    </div>
+                    <div className="mt-5 border-t border-border pt-4">
+                      <h3 className="text-sm font-semibold text-ink">
+                        Shopify me import kaise karein
+                      </h3>
+                      <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-body">
+                        <li>Shopify admin kholo → Online Store → Themes.</li>
+                        <li>Add theme → Upload zip → downloaded zip file chuno.</li>
+                        <li>Theme publish karo — placeholder products/images badal lo.</li>
+                      </ol>
+                    </div>
+                    {exportMsg ? (
+                      <p className="mt-3 text-sm text-body">{exportMsg}</p>
+                    ) : null}
+                  </Card>
+                ) : (
+                  <EmptyState
+                    title="Abhi export karne ko kuch nahi"
+                    message="Pehle Step 3 me pages banao, phir yahan se theme export karo."
+                    action={
+                      <Button variant="ghost" onClick={() => setManualStep(2)}>
+                        Pages par jao
+                      </Button>
+                    }
+                  />
+                )}
+                <div className="flex justify-center">
+                  <Button variant="ghost" onClick={() => setManualStep(2)}>
+                    ← Pages par wapas jao
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ---- Wave 2 — ONE Advanced drawer: every advanced panel lives
+              here, and only when the toggle is ON. Beginner mode me ye
+              aside render hi nahi hota. ---- */}
+          {advanced ? (
+            <AdvancedPanel
+              onClose={() => setAdvanced(false)}
+              themeTokens={
+                <ThemeTokensPanel
+                  theme={project.theme}
+                  onThemeChange={(theme) => saveProject({ theme })}
+                  presets={THEME_PRESETS}
+                />
+              }
+              brandKit={
+                <BrandKitPanel
+                  brandKit={project.brandKit}
+                  onBrandKitChange={(kit) => saveProject({ brandKit: kit })}
+                  onReadFromUrl={handleReadBrandFromUrl}
+                />
+              }
+              sectionLibrary={
+                <SectionLibrary
+                  theme={project.theme}
+                  products={project.csvProducts}
+                  onInsert={handleLibraryInsert}
+                  onSwap={handleLibrarySwap}
+                  selectedSectionType={
+                    activePage?.sections.find(
+                      (s) => s.id === selectedSectionId,
+                    )?.type
+                  }
+                />
+              }
+              mediaLibrary={
+                <MediaLibrary
+                  project={project}
+                  onApplyImage={handleApplyImage}
+                  onRegenerateImage={handleRegenerateImage}
+                  selectedSectionId={selectedSectionId}
+                />
+              }
+              csvImport={
+                <CsvImport
+                  onImport={handleCsvImport}
+                  existingCount={project.csvProducts?.length ?? 0}
+                />
+              }
+              seo={
+                activePage ? (
+                  <SeoPanel page={activePage} onSeoChange={handleSeoChange} />
+                ) : null
+              }
+              funnel={
+                <FunnelView
+                  project={project}
+                  onSelectPage={(id) => {
+                    setActivePageId(id);
+                    setStreamingSections([]);
+                  }}
+                  onGenerateFunnelPage={(step) => void handleGenerateFunnelPage(step)}
+                  onReorder={(pageIds) => saveProject({ funnelOrder: pageIds })}
+                />
+              }
+              comments={
+                <div className="space-y-3">
+                  <CommentsPanel
+                    comments={pageComments}
+                    onAddComment={handleAddComment}
+                    onResolveComment={handleResolveComment}
+                    onApplyAll={handleApplyAllComments}
+                    pageId={activePage?.id}
+                  />
+                  {commentBusy ? (
+                    <p className="text-xs text-body">
+                      Comment apply ho raha hai — proposal review box me aayega…
+                    </p>
+                  ) : null}
+                  {commentProposal ? (
+                    <p className="rounded-xl bg-accent-soft px-3 py-2 text-xs text-accent-text">
+                      Comment proposal review box me hai — Accept karo to comment
+                      resolve hoga, Discard karo to agla comment aayega.
+                    </p>
+                  ) : null}
+                </div>
+              }
+              creditMeter={<CreditMeter project={project} />}
+              onDuplicateVariant={
+                activePageId
+                  ? () => handleDuplicateVariant(activePageId)
+                  : undefined
+              }
+              variantDisabled={!activePageId}
+              onPolish={handlePolish}
+              polishing={polishing}
+              onOpenCustomBlock={() =>
+                setCustomBlockSignal((n) => n + 1)
+              }
+            />
+          ) : null}
+        </div>
       </div>
 
       {exportOpen && activePage && exportAudit ? (
@@ -1578,4 +1786,3 @@ export default function EditorPage() {
     </div>
   );
 }
-

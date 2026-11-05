@@ -114,7 +114,7 @@ export default function FunnelView({
               key={step}
               className="flex items-center gap-3 rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800"
             >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-600 text-sm font-bold text-white">
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
@@ -135,7 +135,7 @@ export default function FunnelView({
                     onClick={() => move(page.id, -1)}
                     disabled={!onReorder || pos <= 0}
                     aria-label={`Move ${label} up`}
-                    className="rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-pink-500 disabled:opacity-40 dark:border-zinc-700"
+                    className="rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-indigo-500 disabled:opacity-40 dark:border-zinc-700"
                   >
                     ↑
                   </button>
@@ -144,7 +144,7 @@ export default function FunnelView({
                     onClick={() => move(page.id, 1)}
                     disabled={!onReorder || pos < 0 || pos >= ordered.length - 1}
                     aria-label={`Move ${label} down`}
-                    className="rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-pink-500 disabled:opacity-40 dark:border-zinc-700"
+                    className="rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-indigo-500 disabled:opacity-40 dark:border-zinc-700"
                   >
                     ↓
                   </button>
@@ -160,7 +160,7 @@ export default function FunnelView({
                 <button
                   type="button"
                   onClick={() => onGenerateFunnelPage(step)}
-                  className="shrink-0 rounded-full bg-pink-600 px-3 py-1 text-xs font-semibold text-white hover:bg-pink-700"
+                  className="shrink-0 rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700"
                 >
                   Generate {label} page
                 </button>
@@ -185,7 +185,7 @@ export default function FunnelView({
                 <button
                   type="button"
                   onClick={() => onSelectPage(page.id)}
-                  className="text-sm text-zinc-600 underline hover:text-pink-600 dark:text-zinc-400"
+                  className="text-sm text-zinc-600 underline hover:text-indigo-600 dark:text-zinc-400"
                 >
                   {page.title} · /{page.slug}
                 </button>
