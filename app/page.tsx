@@ -254,10 +254,11 @@ export default function Home() {
               photoFree
               compact
             />
-            {/* Fix pass 2 — caption in dark slate (was pale text-muted,
-                near-invisible on white). */}
+            {/* Fix pass 3 — honest sample wording (was "ye ek asli
+                generated preview hai", which over-claimed: this is a
+                sample preview of the theme, not a generated store). */}
             <p className="mt-3 text-center text-sm text-slate-600">
-              Aisa dikhega tumhara store — ye ek asli generated preview hai.
+              Aisa dikhega tumhara store — sample preview.
             </p>
           </div>
         </div>

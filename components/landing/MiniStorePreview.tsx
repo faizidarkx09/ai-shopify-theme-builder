@@ -69,6 +69,9 @@ export function MiniStorePreview({
             theme={theme}
             photoFree={photoFree}
             compact={compact}
+            // Fix pass 3 — landing preview: no "placeholder product"
+            // label under prices; the niche products are the preview.
+            hidePlaceholderLabel
           />
         ))}
       </div>

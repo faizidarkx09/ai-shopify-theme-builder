@@ -27,6 +27,14 @@ export interface SectionRendererProps {
    * height cap that slices content mid-heading.
    */
   compact?: boolean;
+  /**
+   * Fix pass 3 — landing previews only (MiniStorePreview): hide the
+   * "· placeholder product" suffix under product prices. The template
+   * products are real sample content for the preview, not a disclaimer
+   * the visitor needs to read on the landing page. The editor keeps the
+   * label — its preview honestly shows placeholder content.
+   */
+  hidePlaceholderLabel?: boolean;
 }
 
 function elProps(
@@ -160,6 +168,7 @@ export default function SectionRenderer({
   onSelectElement,
   photoFree,
   compact = false,
+  hidePlaceholderLabel = false,
 }: SectionRendererProps) {
   const base: React.CSSProperties = {
     backgroundColor: s.bgColor ?? "#ffffff",
@@ -337,11 +346,31 @@ export default function SectionRenderer({
       // copy on the left, products in a 2-col grid on the right;
       // 'centered' = centred header above the same grid.
       const layout = s.layout ?? "default";
-      const products = [
-        { name: "Classic Tee", price: "$29" },
-        { name: "Everyday Jacket", price: "$79" },
-        { name: "Comfort Sneakers", price: "$59" },
-      ];
+      // Fix pass 3 — the template carries the NICHE's own products in
+      // s.text ("Rose Lipstick — $18" lines, lib/templates productLines),
+      // but this case ignored them and hardcoded fashion products, so a
+      // beauty store preview showed "Classic Tee / Everyday Jacket /
+      // Comfort Sneakers" under beauty names. Parse the section text
+      // first; only fall back to the fashion list when no line matches
+      // the "Name — $price" shape (e.g. an AI-written section).
+      const parsedProducts = (s.text ?? "")
+        .split("\n")
+        .map((line) => {
+          const m = line.match(/^\s*(.+?)\s+—\s+(\$\d+(?:\.\d{1,2})?)\s*$/);
+          return m ? { name: m[1].trim(), price: m[2] } : null;
+        })
+        .filter(
+          (p): p is { name: string; price: string } => p !== null,
+        )
+        .slice(0, 3);
+      const products =
+        parsedProducts.length > 0
+          ? parsedProducts
+          : [
+              { name: "Classic Tee", price: "$29" },
+              { name: "Everyday Jacket", price: "$79" },
+              { name: "Comfort Sneakers", price: "$59" },
+            ];
       const card = (p: { name: string; price: string }) => (
         <article key={p.name} className="overflow-hidden rounded-xl bg-white text-gray-900 shadow">
           <Img
@@ -357,16 +386,28 @@ export default function SectionRenderer({
           />
           <div className="p-3 text-left">
             <div className="font-semibold">{p.name}</div>
-            <div className="text-sm opacity-70">{p.price} · placeholder product</div>
+            <div className="text-sm opacity-70">
+              {p.price}
+              {hidePlaceholderLabel ? null : " · placeholder product"}
+            </div>
           </div>
         </article>
       );
+      // When the products come from s.text, that text is data, not copy:
+      // show the subtitle as the subline instead of re-printing the
+      // product lines above the cards. Otherwise keep the old behaviour.
       const header = (
         <>
           <h2 {...ep("title")} style={{ ...titleStyle, fontSize: s.fontSize ?? 28 }}>
             {s.title}
           </h2>
-          {s.text ? (
+          {parsedProducts.length > 0 ? (
+            s.subtitle ? (
+              <p {...ep("subtitle")} className="mt-2 opacity-70">
+                {s.subtitle}
+              </p>
+            ) : null
+          ) : s.text ? (
             <p {...ep("text")} className="mt-2 opacity-70">
               {s.text}
             </p>

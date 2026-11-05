@@ -1504,12 +1504,13 @@ export default function EditorPage() {
           ) : null}
 
           {/* ================= Step 2 — Plan ================= */}
-          {/* Fix pass 2 — this container is a bounded flex column (no
-              own scroll): PlanApproval fills it and scrolls its content
-              internally, so its Approve bar stays pinned at the bottom
-              even with the 22-section list expanded. */}
+          {/* Fix pass 3 — the WINDOW is the scroller on this page (see
+              PlanApproval header: the editor root's 100vh height is dead
+              code under flex-1, and no ancestor bounds the card), so the
+              Approve bar is viewport-fixed. This container gets pb-24 so
+              the last section rows can scroll fully above that bar. */}
           {wizardStep === 1 ? (
-            <div className="flex min-h-0 flex-1 flex-col bg-panel p-4">
+            <div className="flex min-h-0 flex-1 flex-col bg-panel p-4 pb-24">
               <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
                 {plan && !planApproved ? (
                   <>

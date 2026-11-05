@@ -9,15 +9,20 @@
 //     onApprove={() => generateFromPlan(plan)} onCancel={() => setPlan(null)} />}
 // All UI text is original.
 //
-// Fix pass — Step 2 no longer overwhelms a beginner:
-//   * Default view is a COMPACT summary only: theme name + plain colour
-//     names (hex shown beside the name, never alone), font, "3 pages ·
-//     22 sections" with per-page counts. The full editable list lives
-//     behind a collapsed "Edit sections" expander.
-//   * The Approve button lives in a STICKY bottom bar, always visible —
-//     never only at the bottom of a 22-row scroll.
-//   * Section types use plain language (lib/sections.ts SECTION_LABELS:
-//     "Call-to-action button", "Buy button that follows you", …).
+// Fix pass 3 — REAL scroller diagnosis (fix pass 2's claim was wrong
+// in the live browser): the WINDOW scrolls, not the card. Why: the
+// editor root is `flex h-[calc(100vh-121px)] flex-1 flex-col` — but
+// `flex-1` = `flex: 1 1 0%`, and flex-basis 0% overrides the `height`
+// property for the main size, so the 100vh calc is dead code; the root
+// also has no `min-h-0`, so min-height:auto (content height) lets it
+// grow with the 22-row list; and html/body/main above it have no
+// bounded height either (body is only min-h-full). Nothing above the
+// card bounds its height, so the card's inner overflow-y-auto never
+// engages and the whole page scrolls — taking any in-flow bar with it.
+// Fix: the Approve bar is `position: fixed` to the VIEWPORT, which
+// stays visible no matter which element scrolls. It only renders while
+// this component is mounted (Step 2, plan not yet approved), and the
+// page content gets bottom padding so nothing hides behind it.
 
 "use client";
 
@@ -77,15 +82,15 @@ export default function PlanApproval({
   const totalSections = plan.pages.reduce((n, p) => n + p.sections.length, 0);
 
   return (
-    // Fix pass 2 — the card is a bounded flex column: content scrolls
-    // inside (min-h-0 flex-1 overflow-y-auto) and the Approve bar is a
-    // pinned flex sibling below it — never sticky inside the scrolling
-    // content (sticky bottom-0 could not stick: the bar was the last
-    // child, so its parent ended at the bar itself and it scrolled away
-    // with the 22-row list). The editor page gives this card a bounded
-    // height (Step 2 is a flex column), so the inner scroll engages.
+    // Fix pass 3 — the card is a bounded flex column: content scrolls
+    // inside (min-h-0 flex-1 overflow-y-auto) IF an ancestor bounds its
+    // height. On this page no ancestor does (see file header: the window
+    // is the scroller), so the inner scroll is a bonus, not the
+    // mechanism that keeps Approve visible — the fixed bar below is.
+    // pb-20 keeps the last rows clear of the fixed bar when the inner
+    // scroll does engage.
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-20">
       <h2 className="text-lg font-bold">Your store plan</h2>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Check the theme and the pages below. Change anything you like, then
@@ -307,12 +312,14 @@ export default function PlanApproval({
 
       </div>
 
-      {/* Pinned bottom bar — a flex sibling BELOW the scrolling content,
-          so Approve is always visible even with the 22-section list
-          expanded. Not sticky: sticky needs a parent that extends past
-          the bar, which the card does not have. */}
-      <div className="mt-4 -mx-5 -mb-5 shrink-0 border-t border-zinc-200 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex flex-wrap gap-2">
+      {/* Fix pass 3 — VIEWPORT-FIXED bottom bar (not a flex sibling,
+          not sticky): `position: fixed` is relative to the viewport, so
+          Approve stays visible while the expanded 22-section list
+          scrolls, whichever element scrolls (the window, here). z-40
+          sits below the z-50 modals (Export/CustomBlock) so dialogs stay
+          on top. Only mounted on Step 2 while the plan is unapproved. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)] dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="mx-auto flex w-full max-w-3xl flex-wrap gap-2 px-4 py-3">
           <button
             type="button"
             onClick={onApprove}
