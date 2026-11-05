@@ -362,7 +362,7 @@ export default function SectionRenderer({
         .filter(
           (p): p is { name: string; price: string } => p !== null,
         )
-        .slice(0, 3);
+        .slice(0, 4);
       const products =
         parsedProducts.length > 0
           ? parsedProducts
@@ -371,6 +371,11 @@ export default function SectionRenderer({
               { name: "Everyday Jacket", price: "$79" },
               { name: "Comfort Sneakers", price: "$59" },
             ];
+      // Four products (e.g. the cosmetic template's 4 lines) stay in one
+      // row so the hero preview height does not grow; three or fewer keep
+      // the old 3-col grid.
+      const productGridClass =
+        products.length >= 4 ? "grid-cols-4" : "grid-cols-3";
       const card = (p: { name: string; price: string }) => (
         <article key={p.name} className="overflow-hidden rounded-xl bg-white text-gray-900 shadow">
           <Img
@@ -430,7 +435,7 @@ export default function SectionRenderer({
         return (
           <section style={{ ...base, textAlign: "center" }}>
             <div className="mx-auto max-w-2xl text-center">{header}</div>
-            <div className="mx-auto mt-6 grid max-w-6xl grid-cols-3 gap-4">
+            <div className={`mx-auto mt-6 grid max-w-6xl ${productGridClass} gap-4`}>
               {products.map(card)}
             </div>
           </section>
@@ -439,7 +444,7 @@ export default function SectionRenderer({
       return (
         <section style={base}>
           {header}
-          <div className="mx-auto mt-6 grid max-w-6xl grid-cols-3 gap-4">
+          <div className={`mx-auto mt-6 grid max-w-6xl ${productGridClass} gap-4`}>
             {products.map(card)}
           </div>
         </section>
