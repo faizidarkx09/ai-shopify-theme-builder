@@ -15,6 +15,12 @@ export interface SectionRendererProps {
   editMode?: boolean;
   selectedElement?: ElementKey | null;
   onSelectElement?: (el: ElementKey) => void;
+  /**
+   * Photo-free mode (landing previews): no <img> is rendered at all —
+   * every photo becomes a designed gradient tile with the product/store
+   * initial + name, so a preview can never show a wrong photo.
+   */
+  photoFree?: boolean;
 }
 
 function elProps(
@@ -56,6 +62,8 @@ function Img({
   editMode,
   selected,
   onSelect,
+  photoFree,
+  tileGradient,
 }: {
   src: string;
   alt: string;
@@ -65,7 +73,30 @@ function Img({
   editMode?: boolean;
   selected?: ElementKey | null;
   onSelect?: (el: ElementKey) => void;
+  /** Photo-free mode: render a designed tile instead of any <img>. */
+  photoFree?: boolean;
+  /** Gradient for the photo-free tile (theme primary -> accent). */
+  tileGradient?: string;
 }) {
+  if (photoFree) {
+    // Designed tile: gradient block + big initial + name label. No photo,
+    // no external image — the preview always looks intentional.
+    const initial = (alt.trim().charAt(0) || "★").toUpperCase();
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        className={`${className ?? ""} flex flex-col items-center justify-center gap-1 overflow-hidden p-3 text-center`}
+        style={{ ...style, background: tileGradient ?? "#4f46e5" }}
+        {...elProps(el, editMode, selected, onSelect)}
+      >
+        <span className="text-4xl font-bold text-white/95">{initial}</span>
+        <span className="w-full truncate text-xs font-semibold text-white/85">
+          {alt}
+        </span>
+      </div>
+    );
+  }
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -119,6 +150,7 @@ export default function SectionRenderer({
   editMode,
   selectedElement,
   onSelectElement,
+  photoFree,
 }: SectionRendererProps) {
   const base: React.CSSProperties = {
     backgroundColor: s.bgColor ?? "#ffffff",
@@ -132,6 +164,9 @@ export default function SectionRenderer({
     lineHeight: 1.15,
   };
   const ep = (el: ElementKey) => elProps(el, editMode, selectedElement, onSelectElement);
+  // Photo-free tiles use the theme's own gradient, so they always match.
+  const tileGradient = `linear-gradient(135deg, ${theme?.colors.primary ?? "#4f46e5"}, ${theme?.colors.accent ?? "#ec4899"})`;
+  const imgProps = { photoFree, tileGradient } as const;
 
   // Inner markup per type. Animation/layout wrap below — only when set,
   // so sections without them render exactly as before.
@@ -197,6 +232,7 @@ export default function SectionRenderer({
           editMode={editMode}
           selected={selectedElement}
           onSelect={onSelectElement}
+          {...imgProps}
         />
       );
       if (layout === "centered") {
@@ -212,6 +248,7 @@ export default function SectionRenderer({
                 editMode={editMode}
                 selected={selectedElement}
                 onSelect={onSelectElement}
+          {...imgProps}
               />
             </div>
           </section>
@@ -273,6 +310,7 @@ export default function SectionRenderer({
                   editMode={editMode}
                   selected={selectedElement}
                   onSelect={onSelectElement}
+          {...imgProps}
                 />
                 <figcaption className="p-3 text-sm font-semibold">{c}</figcaption>
               </figure>
@@ -301,6 +339,7 @@ export default function SectionRenderer({
             editMode={editMode}
             selected={selectedElement}
             onSelect={onSelectElement}
+          {...imgProps}
           />
           <div className="p-3 text-left">
             <div className="font-semibold">{p.name}</div>
@@ -706,6 +745,7 @@ export default function SectionRenderer({
                   editMode={editMode}
                   selected={selectedElement}
                   onSelect={onSelectElement}
+          {...imgProps}
                 />
                 <div className="p-3 text-left">
                   <div className="text-sm font-semibold">{p.name}</div>

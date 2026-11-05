@@ -55,34 +55,44 @@ export default function EditorTopBar({
         <span className="max-w-48 truncate text-sm font-semibold text-ink">
           {projectName}
         </span>
-        <div className="ml-auto flex items-center gap-3">
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink">
-            <span>Advanced</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={advanced}
-              aria-label="Advanced settings dikhao ya chhupao"
-              onClick={() => onAdvancedChange(!advanced)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                advanced ? "bg-accent" : "bg-slate-300"
-              }`}
-            >
-              <span
-                aria-hidden
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  advanced ? "translate-x-5" : "translate-x-0.5"
+        <div className="ml-auto flex items-start gap-3">
+          <div className="flex flex-col">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink">
+              <span>Advanced</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={advanced}
+                aria-label="Advanced settings dikhao ya chhupao"
+                onClick={() => onAdvancedChange(!advanced)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  advanced ? "bg-accent" : "bg-slate-300"
                 }`}
-              />
-            </button>
-          </label>
-          <Button
-            size="sm"
-            onClick={onOpenExport}
-            disabled={exporting || exportDisabled}
-          >
-            {exporting ? "Export…" : "Export Shopify Theme"}
-          </Button>
+              >
+                <span
+                  aria-hidden
+                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    advanced ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </label>
+            <p className="text-[11px] text-muted">Pro features — zaroori nahi</p>
+          </div>
+          <div className="flex flex-col items-end">
+            <Button
+              size="sm"
+              onClick={onOpenExport}
+              disabled={exporting || exportDisabled}
+            >
+              {exporting ? "Export…" : "Export Shopify Theme"}
+            </Button>
+            {exportDisabled ? (
+              <p className="mt-1 text-[11px] text-muted">
+                Export Step 4 me milega
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
       <div className="mt-3">

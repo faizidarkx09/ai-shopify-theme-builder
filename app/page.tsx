@@ -19,6 +19,7 @@ import { THEME_PRESETS } from "@/lib/theme";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { MiniStorePreview } from "@/components/landing/MiniStorePreview";
+import { ThemeCardPreview } from "@/components/landing/ThemeCardPreview";
 
 /** Cut B #18 — landing niche tabs: one tap pre-fills the prompt box. */
 const LANDING_NICHES = ["fashion", "beauty", "electronics"] as const;
@@ -145,8 +146,13 @@ export default function Home() {
   return (
     <div className="stb-container flex-1">
       {/* ---------- 1. Hero: prompt box + asli mini store preview ---------- */}
+      {/* Fix pass: mobile-first single column (headline, subline, prompt
+          box + button FIRST, preview below at a capped height); desktop
+          keeps two columns but with ALIGNED TOPS (items-start — the old
+          items-center pushed the headline ~550px down) and a capped
+          preview, so the prompt box is visible on arrival, no voids. */}
       <section className="stb-section">
-        <div className="grid items-center gap-10 lg:grid-cols-2">
+        <div className="grid items-start gap-8 lg:grid-cols-2">
           <div className="text-center lg:text-left">
             <h1 className="text-hero">
               Apni Shopify theme ek prompt me banao
@@ -215,12 +221,22 @@ export default function Home() {
             <p className="mt-3 text-sm text-muted">Free to try</p>
           </div>
 
-          {/* Phone-width framed preview — asli storefront, mock nahi. */}
-          <div className="mx-auto w-full max-w-[420px]">
-            <MiniStorePreview
-              theme={HERO_THEME}
-              prompt={HERO_PROMPT}
-              label="Rose Glow theme ka sample store preview"
+          {/* Phone-width framed preview — asli storefront, mock nahi.
+              Photo-free: no <img> at all, so no wrong photo can appear.
+              Height-capped (560px) with a soft fade at the bottom so the
+              cut looks intentional instead of clipped mid-word. */}
+          <div className="relative mx-auto w-full max-w-[420px]">
+            <div className="max-h-[560px] overflow-hidden rounded-2xl">
+              <MiniStorePreview
+                theme={HERO_THEME}
+                prompt={HERO_PROMPT}
+                label="Rose Glow theme ka sample store preview"
+                photoFree
+              />
+            </div>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent"
             />
             <p className="mt-3 text-center text-sm text-muted">
               Aisa dikhega tumhara store — ye ek asli generated preview hai.
@@ -259,17 +275,12 @@ export default function Home() {
             if (!theme) return null;
             return (
               <Card key={g.presetId} padding="compact">
-                {/* Peek-height preview — header + hero nazar aate hain,
-                    baaki sections neeche scroll jaisi jhalak dete hain. */}
-                <div className="max-h-[380px] overflow-hidden rounded-xl">
-                  <MiniStorePreview
-                    theme={theme}
-                    prompt={g.prompt}
-                    label={`${theme.name} theme ka sample store preview`}
-                  />
-                </div>
+                {/* Fixed-height designed preview (320px, photo-free):
+                    header + hero + product tiles — nothing overflows,
+                    nothing clips mid-word. */}
+                <ThemeCardPreview theme={theme} tagline={g.line} />
                 <h3 className="mt-4 text-h3">{theme.name}</h3>
-                <p className="mt-1 text-sm text-body">{g.line}</p>
+                <p className="mt-1 line-clamp-2 text-sm text-body">{g.line}</p>
                 <Button
                   variant="primary"
                   size="sm"
@@ -297,19 +308,8 @@ export default function Home() {
           ))}
         </div>
       </section>
-
-      {/* ---------- 5. Minimal footer ---------- */}
-      <footer className="flex flex-col items-center justify-between gap-2 border-t border-border py-6 text-sm text-muted sm:flex-row">
-        <p>AI Shopify Theme Builder — prompt se theme, theme se store.</p>
-        <div className="flex gap-4">
-          <Link href="/dashboard" className="text-muted hover:text-accent">
-            Dashboard
-          </Link>
-          <Link href="/billing" className="text-muted hover:text-accent">
-            Billing
-          </Link>
-        </div>
-      </footer>
+      {/* No page footer here — the layout already renders the ONE global
+          footer (fix pass: duplicate footer line removed). */}
     </div>
   );
 }

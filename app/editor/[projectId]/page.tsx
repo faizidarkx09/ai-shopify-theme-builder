@@ -10,7 +10,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { getProjectStore } from "@/lib/db/store";
+import { getProjectStore, type ProjectStore } from "@/lib/db/store";
+import { derivePlan } from "@/lib/ai/plan";
+import { buildPageFromTemplate } from "@/lib/templates";
+import { getOrCreateDemoUser } from "@/lib/auth";
 import EditorTopBar, { type ViewMode } from "@/components/editor/EditorTopBar";
 import EditorChat from "@/components/editor/EditorChat";
 import EditorPreview from "@/components/editor/EditorPreview";
@@ -63,6 +66,29 @@ const ENTRANCES: SectionAnimation["entrance"][] = [
   "slide-left",
 ];
 const HOVERS: SectionAnimation["hover"][] = ["none", "lift", "scale"];
+
+/**
+ * Fix pass — /editor/demo is a REAL demo, never a dead-end error page.
+ * The demo project is built from the template generator (derivePlan +
+ * buildPageFromTemplate) and reused by name on refresh, so a first-time
+ * visitor always lands on a working wizard with real pages.
+ */
+const DEMO_PROJECT_NAME = "Demo Store";
+const DEMO_PROMPT = "A skincare and beauty store with a soft pink glow theme";
+
+function createDemoProjectFromTemplate(
+  store: ProjectStore,
+  ownerId: string,
+): Project {
+  const plan = derivePlan(DEMO_PROMPT);
+  const pages = plan.pages.map((pp) =>
+    buildPageFromTemplate(DEMO_PROMPT, plan.theme, pp.pageType, pp.title),
+  );
+  return store.create(
+    { name: DEMO_PROJECT_NAME, prompt: DEMO_PROMPT, theme: plan.theme, pages },
+    ownerId,
+  );
+}
 
 function normalizeAnimation(raw: unknown): SectionAnimation | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -306,6 +332,18 @@ export default function EditorPage() {
 
   useEffect(() => {
     const store = getProjectStore();
+    // Fix pass — /editor/demo auto-creates (or reuses) a real demo
+    // project from the template generator and opens the wizard on it.
+    // A first-time visitor never sees the "Project nahi mila" dead end.
+    if (projectId === "demo") {
+      const user = getOrCreateDemoUser();
+      const existing =
+        store.list(user.id).find((p) => p.name === DEMO_PROJECT_NAME) ?? null;
+      const demo = existing ?? createDemoProjectFromTemplate(store, user.id);
+      setProject(demo);
+      setActivePageId(demo.pages[0]?.id ?? null);
+      return;
+    }
     const found = store.get(projectId);
     if (!found) {
       setNotFound(true);

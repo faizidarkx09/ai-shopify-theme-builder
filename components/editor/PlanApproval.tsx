@@ -8,11 +8,23 @@
 //   {plan && <PlanApproval plan={plan} onPlanChange={setPlan}
 //     onApprove={() => generateFromPlan(plan)} onCancel={() => setPlan(null)} />}
 // All UI text is original.
+//
+// Fix pass — Step 2 no longer overwhelms a beginner:
+//   * Default view is a COMPACT summary only: theme name + plain colour
+//     names (hex shown beside the name, never alone), font, "3 pages ·
+//     22 sections" with per-page counts. The full editable list lives
+//     behind a collapsed "Edit sections" expander.
+//   * The Approve button lives in a STICKY bottom bar, always visible —
+//     never only at the bottom of a 22-row scroll.
+//   * Section types use plain language (lib/sections.ts SECTION_LABELS:
+//     "Call-to-action button", "Buy button that follows you", …).
 
 "use client";
 
 import { useState } from "react";
 import { SECTION_TYPES, type PageType, type SectionType } from "@/lib/types";
+import { SECTION_LABELS } from "@/lib/sections";
+import { colorName } from "@/lib/colorNames";
 import {
   addPlanPage,
   addPlanSection,
@@ -42,13 +54,6 @@ const PAGE_TYPE_LABELS: Record<PageType, string> = {
   category: "Category page",
 };
 
-function sectionLabel(type: SectionType): string {
-  return type
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 export default function PlanApproval({
   plan,
   onPlanChange,
@@ -58,13 +63,16 @@ export default function PlanApproval({
 }: PlanApprovalProps) {
   const [newSectionType, setNewSectionType] = useState<Record<number, SectionType>>({});
   const [newPageType, setNewPageType] = useState<PageType>("product");
+  // Full editable sitemap is collapsed by default — beginners see the
+  // compact summary first and open it only if they want to change it.
+  const [editingSections, setEditingSections] = useState(false);
   const theme = plan.theme;
-  const swatches: Array<{ label: string; value: string }> = [
-    { label: "Primary", value: theme.colors.primary },
-    { label: "Secondary", value: theme.colors.secondary },
-    { label: "Background", value: theme.colors.background },
-    { label: "Text", value: theme.colors.text },
-    { label: "Accent", value: theme.colors.accent },
+  const swatches: Array<{ role: string; value: string }> = [
+    { role: "Primary", value: theme.colors.primary },
+    { role: "Secondary", value: theme.colors.secondary },
+    { role: "Background", value: theme.colors.background },
+    { role: "Text", value: theme.colors.text },
+    { role: "Accent", value: theme.colors.accent },
   ];
   const totalSections = plan.pages.reduce((n, p) => n + p.sections.length, 0);
 
@@ -76,7 +84,8 @@ export default function PlanApproval({
         approve to start building — nothing is generated yet.
       </p>
 
-      {/* Theme card */}
+      {/* Theme card — colours shown as plain names with the hex beside
+          the name, never a bare hex code as the only label. */}
       <div className="mt-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -99,167 +108,214 @@ export default function PlanApproval({
               dangerouslySetInnerHTML={{ __html: plan.logo.svg }}
             />
           ) : null}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {swatches.map((s) => (
-              <span key={s.label} className="text-center" title={`${s.label}: ${s.value}`}>
+              <span
+                key={s.role}
+                className="text-center"
+                title={`${s.role}: ${colorName(s.value)} ${s.value}`}
+              >
                 <span
                   className="block h-8 w-8 rounded-full border border-zinc-300 dark:border-zinc-700"
                   style={{ backgroundColor: s.value }}
                 />
-                <span className="mt-1 block text-[10px] text-zinc-500">{s.label}</span>
+                <span className="mt-1 block text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
+                  {colorName(s.value)}
+                </span>
+                <span className="block text-[10px] text-zinc-500">
+                  {s.value.toUpperCase()}
+                </span>
               </span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Editable sitemap */}
-      <div className="mt-4">
-        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-          Pages ({plan.pages.length}) · Sections ({totalSections})
+      {/* Compact summary (default view): pages + section counts only. */}
+      <div className="mt-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <p className="text-sm font-bold">
+          {plan.pages.length} pages · {totalSections} sections
         </p>
-        <div className="mt-2 space-y-3">
-          {plan.pages.map((page, pageIndex) => (
-            <div
-              key={`${page.slug}-${pageIndex}`}
-              className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold dark:bg-zinc-800">
-                  {PAGE_TYPE_LABELS[page.pageType]}
-                </span>
-                <input
-                  value={page.title}
-                  onChange={(e) =>
-                    onPlanChange(updatePlanPageTitle(plan, pageIndex, e.target.value))
-                  }
-                  aria-label={`Title for ${page.slug} page`}
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
-                />
-                <span className="text-xs text-zinc-400">/{page.slug}</span>
-                {plan.pages.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => onPlanChange(removePlanPage(plan, pageIndex))}
-                    disabled={generating}
-                    className="rounded-full border border-zinc-300 px-3 py-1 text-xs hover:border-red-500 hover:text-red-600 disabled:opacity-50 dark:border-zinc-700"
-                  >
-                    Remove page
-                  </button>
-                )}
-              </div>
-
-              <ul className="mt-2 space-y-1 pl-4">
-                {page.sections.map((section, sectionIndex) => (
-                  <li key={`${section.type}-${sectionIndex}`} className="flex items-center gap-2">
-                    <span className="w-28 shrink-0 truncate text-xs text-zinc-500">
-                      {sectionLabel(section.type)}
-                    </span>
-                    <input
-                      value={section.title}
-                      onChange={(e) =>
-                        onPlanChange(
-                          updatePlanSectionTitle(plan, pageIndex, sectionIndex, e.target.value),
-                        )
-                      }
-                      aria-label={`Title for ${section.type} section on ${page.title}`}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onPlanChange(removePlanSection(plan, pageIndex, sectionIndex))
-                      }
-                      disabled={generating || page.sections.length <= 1}
-                      aria-label={`Remove ${section.type} section`}
-                      className="shrink-0 rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-red-500 hover:text-red-600 disabled:opacity-50 dark:border-zinc-700"
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2 pl-4">
-                <select
-                  value={newSectionType[pageIndex] ?? "testimonials"}
-                  onChange={(e) =>
-                    setNewSectionType((prev) => ({
-                      ...prev,
-                      [pageIndex]: e.target.value as SectionType,
-                    }))
-                  }
-                  aria-label={`Section type to add to ${page.title}`}
-                  className="rounded-lg border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                >
-                  {SECTION_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {sectionLabel(t)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPlanChange(
-                      addPlanSection(
-                        plan,
-                        pageIndex,
-                        newSectionType[pageIndex] ?? "testimonials",
-                      ),
-                    )
-                  }
-                  disabled={generating}
-                  className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
-                >
-                  + Add section
-                </button>
-              </div>
-            </div>
+        <ul className="mt-2 space-y-1">
+          {plan.pages.map((page, i) => (
+            <li key={`${page.slug}-${i}`} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold dark:bg-zinc-800">
+                {PAGE_TYPE_LABELS[page.pageType]}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800 dark:text-zinc-200">
+                {page.title}
+              </span>
+              <span className="shrink-0 text-xs">
+                {page.sections.length} sections
+              </span>
+            </li>
           ))}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select
-            value={newPageType}
-            onChange={(e) => setNewPageType(e.target.value as PageType)}
-            aria-label="Page type to add"
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            {(Object.keys(PAGE_TYPE_LABELS) as PageType[]).map((t) => (
-              <option key={t} value={t}>
-                {PAGE_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => onPlanChange(addPlanPage(plan, newPageType))}
-            disabled={generating}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
-          >
-            + Add page
-          </button>
-        </div>
+        </ul>
+        <button
+          type="button"
+          onClick={() => setEditingSections((v) => !v)}
+          aria-expanded={editingSections}
+          className="mt-3 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-semibold hover:border-indigo-500 hover:text-indigo-600 dark:border-zinc-700"
+        >
+          {editingSections
+            ? "Hide section editor ↑"
+            : `Edit sections (${totalSections}) — pages aur sections badlo ↓`}
+        </button>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onApprove}
-          disabled={generating}
-          className="rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {generating ? "Building…" : "Approve & start generation"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={generating}
-          className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-semibold hover:border-zinc-500 disabled:opacity-50 dark:border-zinc-700"
-        >
-          Back to prompt
-        </button>
+      {/* Full editable sitemap — only when the expander is open. */}
+      {editingSections ? (
+        <div className="mt-4">
+          <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Pages ({plan.pages.length}) · Sections ({totalSections})
+          </p>
+          <div className="mt-2 space-y-3">
+            {plan.pages.map((page, pageIndex) => (
+              <div
+                key={`${page.slug}-${pageIndex}`}
+                className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold dark:bg-zinc-800">
+                    {PAGE_TYPE_LABELS[page.pageType]}
+                  </span>
+                  <input
+                    value={page.title}
+                    onChange={(e) =>
+                      onPlanChange(updatePlanPageTitle(plan, pageIndex, e.target.value))
+                    }
+                    aria-label={`Title for ${page.slug} page`}
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
+                  />
+                  <span className="text-xs text-zinc-400">/{page.slug}</span>
+                  {plan.pages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => onPlanChange(removePlanPage(plan, pageIndex))}
+                      disabled={generating}
+                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs hover:border-red-500 hover:text-red-600 disabled:opacity-50 dark:border-zinc-700"
+                    >
+                      Remove page
+                    </button>
+                  )}
+                </div>
+
+                <ul className="mt-2 space-y-1 pl-4">
+                  {page.sections.map((section, sectionIndex) => (
+                    <li key={`${section.type}-${sectionIndex}`} className="flex items-center gap-2">
+                      <span className="w-40 shrink-0 truncate text-xs text-zinc-500">
+                        {SECTION_LABELS[section.type]}
+                      </span>
+                      <input
+                        value={section.title}
+                        onChange={(e) =>
+                          onPlanChange(
+                            updatePlanSectionTitle(plan, pageIndex, sectionIndex, e.target.value),
+                          )
+                        }
+                        aria-label={`Title for ${section.type} section on ${page.title}`}
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPlanChange(removePlanSection(plan, pageIndex, sectionIndex))
+                        }
+                        disabled={generating || page.sections.length <= 1}
+                        aria-label={`Remove ${section.type} section`}
+                        className="shrink-0 rounded-full border border-zinc-300 px-2 py-1 text-xs hover:border-red-500 hover:text-red-600 disabled:opacity-50 dark:border-zinc-700"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2 pl-4">
+                  <select
+                    value={newSectionType[pageIndex] ?? "testimonials"}
+                    onChange={(e) =>
+                      setNewSectionType((prev) => ({
+                        ...prev,
+                        [pageIndex]: e.target.value as SectionType,
+                      }))
+                    }
+                    aria-label={`Section type to add to ${page.title}`}
+                    className="rounded-lg border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    {SECTION_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {SECTION_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPlanChange(
+                        addPlanSection(
+                          plan,
+                          pageIndex,
+                          newSectionType[pageIndex] ?? "testimonials",
+                        ),
+                      )
+                    }
+                    disabled={generating}
+                    className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
+                  >
+                    + Add section
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              value={newPageType}
+              onChange={(e) => setNewPageType(e.target.value as PageType)}
+              aria-label="Page type to add"
+              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              {(Object.keys(PAGE_TYPE_LABELS) as PageType[]).map((t) => (
+                <option key={t} value={t}>
+                  {PAGE_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onPlanChange(addPlanPage(plan, newPageType))}
+              disabled={generating}
+              className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700"
+            >
+              + Add page
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Sticky bottom bar — Approve is always visible, never only at
+          the bottom of a long scroll. */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 mt-5 border-t border-zinc-200 bg-white/95 px-5 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onApprove}
+            disabled={generating}
+            className="rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {generating ? "Building…" : "Approve & start generation"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={generating}
+            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-semibold hover:border-zinc-500 disabled:opacity-50 dark:border-zinc-700"
+          >
+            Back to prompt
+          </button>
+        </div>
       </div>
     </div>
   );
