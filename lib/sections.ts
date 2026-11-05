@@ -35,7 +35,115 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   features: "Features",
   cta: "Call to action",
   footer: "Footer",
+  testimonials: "Testimonials",
+  faq: "FAQ",
+  newsletter: "Newsletter signup",
+  announcement: "Announcement bar",
+  countdown: "Countdown timer",
+  "trust-badges": "Trust badges",
+  bundle: "Bundle offer",
+  "sticky-atc": "Sticky add to cart",
+  delivery: "Delivery info",
+  custom: "Custom block",
 };
+
+export const SECTION_DESCRIPTIONS: Record<SectionType, string> = {
+  header: "Store name and navigation links.",
+  hero: "Large headline with an image and a shop button.",
+  banner: "Short promo strip for a sale or offer.",
+  category: "Grid of shop-by-category cards.",
+  product: "Grid of best-selling products.",
+  features: "Why shop with us — delivery, returns, checkout.",
+  cta: "Closing call to action with one button.",
+  footer: "Store links, help and copyright.",
+  testimonials: "Customer quote cards with names and ratings.",
+  faq: "Question and answer list for common queries.",
+  newsletter: "Email signup with a subscribe button.",
+  announcement: "Slim top bar for a short store-wide message.",
+  countdown: "Days, hours and minutes until an offer ends.",
+  "trust-badges": "Small row of trust signals — secure checkout, returns, shipping.",
+  bundle: "Product bundle cards with a combined total.",
+  "sticky-atc": "Bottom bar with price and an add-to-cart button.",
+  delivery: "Estimated delivery line for the order.",
+  custom: "Your own HTML, CSS and JavaScript in a sandboxed block.",
+};
+
+// ---------------------------------------------------------------------------
+// Layout variants — Cut B #7 (per-section Regenerate + Layout Switcher).
+// `layout` lives on Section (lib/types.ts, free-form string). 'default' is
+// the rendering the section already had; 'split' puts the image/copy side
+// by side in a different arrangement; 'centered' stacks it centred.
+// SectionRenderer only branches for hero/product/features/testimonials/faq;
+// every other type has exactly one (default) layout.
+// ---------------------------------------------------------------------------
+
+export interface LayoutOption {
+  id: string;
+  label: string;
+}
+
+const DEFAULT_LAYOUT: LayoutOption[] = [{ id: "default", label: "Default" }];
+
+export const LAYOUTS: Record<SectionType, LayoutOption[]> = {
+  hero: [
+    { id: "default", label: "Side by side" },
+    { id: "split", label: "Image left" },
+    { id: "centered", label: "Centered" },
+  ],
+  product: [
+    { id: "default", label: "Grid" },
+    { id: "split", label: "Intro + grid" },
+    { id: "centered", label: "Centered" },
+  ],
+  features: [
+    { id: "default", label: "Grid" },
+    { id: "split", label: "Intro + list" },
+    { id: "centered", label: "Centered" },
+  ],
+  testimonials: [
+    { id: "default", label: "Grid" },
+    { id: "split", label: "Featured quote" },
+    { id: "centered", label: "Centered" },
+  ],
+  faq: [
+    { id: "default", label: "Stacked" },
+    { id: "split", label: "Intro + questions" },
+    { id: "centered", label: "Centered" },
+  ],
+  header: DEFAULT_LAYOUT,
+  footer: DEFAULT_LAYOUT,
+  banner: DEFAULT_LAYOUT,
+  category: DEFAULT_LAYOUT,
+  cta: DEFAULT_LAYOUT,
+  newsletter: DEFAULT_LAYOUT,
+  announcement: DEFAULT_LAYOUT,
+  countdown: DEFAULT_LAYOUT,
+  "trust-badges": DEFAULT_LAYOUT,
+  bundle: DEFAULT_LAYOUT,
+  "sticky-atc": DEFAULT_LAYOUT,
+  delivery: DEFAULT_LAYOUT,
+  custom: DEFAULT_LAYOUT,
+};
+
+/** Layout options for a section type (never empty — at least 'default'). */
+export function layoutOptions(type: SectionType): LayoutOption[] {
+  return LAYOUTS[type] ?? DEFAULT_LAYOUT;
+}
+
+/** Next layout id when cycling (toolbar "⟳ Layout" button). */
+export function nextLayout(type: SectionType, current?: string): string {
+  const opts = layoutOptions(type);
+  const i = opts.findIndex((o) => o.id === (current ?? "default"));
+  return opts[(i + 1) % opts.length]?.id ?? "default";
+}
+
+/** Human label for a section's current layout (toolbar button text). */
+export function layoutLabel(type: SectionType, layout?: string): string {
+  return (
+    layoutOptions(type).find((o) => o.id === (layout ?? "default"))?.label ??
+    "Default"
+  );
+}
 
 export function uid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -127,6 +235,106 @@ const DEFAULTS: Record<
     align: "left",
     padding: 40,
     fontSize: 16,
+  },
+  testimonials: {
+    title: "What Customers Say",
+    subtitle: "",
+    text: "Rated 4.9 out of 5 by happy customers.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "center",
+    padding: 48,
+    fontSize: 28,
+  },
+  faq: {
+    title: "Frequently Asked Questions",
+    subtitle: "",
+    text: "How fast is delivery? Orders ship within 24 hours. Can I return an item? Yes, within 30 days.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "left",
+    padding: 48,
+    fontSize: 28,
+  },
+  newsletter: {
+    title: "Get 10% Off Your First Order",
+    subtitle: "",
+    text: "Join the list for new drops and member-only offers. No spam.",
+    bgColor: "#111827",
+    textColor: "#f9fafb",
+    align: "center",
+    padding: 48,
+    fontSize: 28,
+  },
+  announcement: {
+    title: "Free shipping on orders over $50",
+    subtitle: "",
+    text: "",
+    bgColor: "#111827",
+    textColor: "#f9fafb",
+    align: "center",
+    padding: 12,
+    fontSize: 14,
+  },
+  countdown: {
+    title: "Sale Ends Soon",
+    subtitle: "",
+    text: "Up to 40% off — when the timer hits zero, prices go back up.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "center",
+    padding: 48,
+    fontSize: 28,
+  },
+  "trust-badges": {
+    title: "Shop With Confidence",
+    subtitle: "",
+    text: "Secure checkout · 30-day returns · Fast delivery · Real support.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "center",
+    padding: 32,
+    fontSize: 24,
+  },
+  bundle: {
+    title: "Bundle & Save",
+    subtitle: "",
+    text: "Buy the set together and save more than buying each piece alone.",
+    bgColor: "#f9fafb",
+    textColor: "#111827",
+    align: "center",
+    padding: 48,
+    fontSize: 28,
+  },
+  "sticky-atc": {
+    title: "Classic Tee — $29",
+    subtitle: "",
+    text: "In stock — ships within 24 hours.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "left",
+    padding: 16,
+    fontSize: 18,
+  },
+  delivery: {
+    title: "Fast, Tracked Delivery",
+    subtitle: "",
+    text: "Order today and get it in 2–4 working days. Free shipping over $50.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "left",
+    padding: 32,
+    fontSize: 24,
+  },
+  custom: {
+    title: "Custom Block",
+    subtitle: "",
+    text: "Add your own HTML, CSS and JavaScript here.",
+    bgColor: "#ffffff",
+    textColor: "#111827",
+    align: "left",
+    padding: 32,
+    fontSize: 24,
   },
 };
 

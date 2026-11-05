@@ -60,7 +60,11 @@ function fontStack(font: string): string {
   return map[font] ?? `'${font}', system-ui, sans-serif`;
 }
 
-/** Section type -> Shopify section file ka naam. */
+/** Section type -> Shopify section file ka naam.
+ *  Wave 0: new types map onto EXISTING files only — the zip stays the
+ *  same size. testimonials/faq/trust-badges -> features,
+ *  newsletter/custom -> cta, announcement/countdown/delivery -> banner,
+ *  bundle/sticky-atc -> product-grid. */
 export function sectionFileName(type: SectionType): string {
   const map: Record<SectionType, string> = {
     header: "header",
@@ -71,6 +75,16 @@ export function sectionFileName(type: SectionType): string {
     features: "features",
     footer: "footer",
     cta: "cta",
+    testimonials: "features",
+    faq: "features",
+    newsletter: "cta",
+    announcement: "banner",
+    countdown: "banner",
+    "trust-badges": "features",
+    bundle: "product-grid",
+    "sticky-atc": "product-grid",
+    delivery: "banner",
+    custom: "cta",
   };
   return map[type];
 }
@@ -186,8 +200,47 @@ function schemaFor(section: Section, extraSettings: Record<string, unknown>[]): 
   };
 }
 
+function sectionLiquidMerged(markups: string[], schema: Record<string, unknown>, note: string): string {
+  return `{% comment %}\n  ${note}\n  ${PLACEHOLDER_DISCLAIMER}\n{% endcomment %}\n${markups.join("\n")}\n{% schema %}\n${JSON.stringify(schema, null, 2)}\n{% endschema %}\n`;
+}
+
+/** Single-section file (header/footer fallback) via the merged writer. */
 function sectionLiquid(def: SectionDef, note: string): string {
-  return `{% comment %}\n  ${note}\n  ${PLACEHOLDER_DISCLAIMER}\n{% endcomment %}\n${def.markup}\n{% schema %}\n${JSON.stringify(def.schema, null, 2)}\n{% endschema %}\n`;
+  return sectionLiquidMerged([def.markup], def.schema, note);
+}
+
+/**
+ * Merge a later section's def into a file that already has content.
+ * A Liquid section file has ONE {% schema %} block, so the markup and the
+ * schema settings of the extra section get a unique prefix
+ * (`<type>_<n>_<setting>`) — e.g. a `custom` block sharing cta.liquid with
+ * a plain `cta` keeps its own custom_html/custom_css/custom_js settings
+ * instead of colliding with the first section's heading/text settings.
+ */
+function mergeSectionDef(
+  entry: { markups: string[]; schema: Record<string, unknown> },
+  def: SectionDef,
+  section: Section,
+): void {
+  const prefix = `${section.type}_${entry.markups.length}`;
+  const markup = def.markup.replace(
+    /section\.settings\.([a-zA-Z0-9_]+)/g,
+    (_m, id: string) => `section.settings.${prefix}_${id}`,
+  );
+  entry.markups.push(markup);
+  const base = entry.schema.settings as Record<string, unknown>[];
+  const extra = (def.schema.settings as Record<string, unknown>[]).map((s) => ({
+    ...s,
+    id: `${prefix}_${String(s.id)}`,
+  }));
+  entry.schema = {
+    ...entry.schema,
+    settings: [...base, ...extra],
+    presets: [
+      ...((entry.schema.presets as Record<string, unknown>[]) ?? []),
+      ...((def.schema.presets as Record<string, unknown>[]) ?? []),
+    ],
+  };
 }
 
 function buildSectionDef(section: Section, project: Project): SectionDef {
@@ -248,6 +301,77 @@ function buildSectionDef(section: Section, project: Project): SectionDef {
         markup: `<section class="cta" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 48px 20px;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    <a class="btn" href="/collections/all">{{ section.settings.subheading | escape | default: 'Shop now' }}</a>\n  </div>\n</section>`,
         schema: schemaFor(section, []),
       };
+    case "testimonials":
+      return {
+        file,
+        markup: `<section style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 40px 0;">\n  <div class="container">\n    <h2 style="text-align: center;">{{ section.settings.heading | escape }}</h2>\n    <p style="text-align: center;">{{ section.settings.text | escape }}</p>\n    <div class="features">\n      <div><p>&ldquo;Quality is excellent — delivery was fast and the product feels premium.&rdquo;</p><p><strong>— Ayesha K.</strong> ★★★★★</p></div>\n      <div><p>&ldquo;Ordered twice already. Support answered within minutes both times.&rdquo;</p><p><strong>— Bilal R.</strong> ★★★★★</p></div>\n      <div><p>&ldquo;Exactly as described. I recommend this store to all my friends.&rdquo;</p><p><strong>— Sara M.</strong> ★★★★☆</p></div>\n    </div>\n    <p class="placeholder-note">Placeholder reviews — replace with real customer quotes in Shopify.</p>\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "faq":
+      return {
+        file,
+        markup: `<section style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 40px 0;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    <div>\n      <h3>How fast is delivery?</h3><p>Orders ship within 24 hours and arrive in 2–4 working days.</p>\n      <h3>Can I return an item?</h3><p>Yes — easy returns within 30 days, no questions asked.</p>\n      <h3>Is checkout secure?</h3><p>Yes, payments go through Shopify's secure checkout.</p>\n    </div>\n    <p class="placeholder-note">Placeholder answers — edit them in the Shopify theme editor.</p>\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "newsletter":
+      return {
+        file,
+        markup: `<section class="cta" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 48px 20px;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    {%- form 'customer' -%}\n      <input type="email" name="contact[email]" placeholder="Your email address" required style="padding: 12px 20px; border-radius: 999px; border: 1px solid #ccc; min-width: 260px;">\n      <button type="submit" class="btn">Subscribe</button>\n    {%- endform -%}\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "announcement":
+      return {
+        file,
+        markup: `<div class="banner" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 10px 20px; text-align: center; font-size: 0.9rem; font-weight: 600;">{{ section.settings.heading | escape }}</div>`,
+        schema: schemaFor(section, []),
+      };
+    case "countdown": {
+      const target =
+        typeof section.meta?.countdownTarget === "string"
+          ? section.meta.countdownTarget
+          : "";
+      return {
+        file,
+        markup: `<section class="banner" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 32px 20px;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    <p data-countdown-target="${esc(target)}" style="font-size: 1.5rem; font-weight: 700;">Sale ends soon — check back before the offer closes.</p>\n    <p class="placeholder-note">Countdown target is stored in the section settings; wire it to a timer in theme.js.</p>\n  </div>\n</section>`,
+        schema: schemaFor(section, [
+          { type: "text", id: "countdown_target", label: "Countdown target (ISO date)", default: target },
+        ]),
+      };
+    }
+    case "trust-badges":
+      return {
+        file,
+        markup: `<section style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 32px 0;">\n  <div class="container">\n    <h2 style="text-align: center;">{{ section.settings.heading | escape }}</h2>\n    <div class="features">\n      <div><h3>Secure checkout</h3><p>Safe payments</p></div>\n      <div><h3>30-day returns</h3><p>No questions asked</p></div>\n      <div><h3>Fast delivery</h3><p>Ships in 24 hours</p></div>\n      <div><h3>Real support</h3><p>We reply within a day</p></div>\n    </div>\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "bundle":
+      return {
+        file,
+        markup: `<section style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 40px 0;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    <div class="grid">\n      {%- for product in collections.all.products limit: 3 -%}\n        {% render 'product-card', product: product %}\n      {%- else -%}\n        {% render 'product-card' %}\n        {% render 'product-card' %}\n        {% render 'product-card' %}\n      {%- endfor -%}\n    </div>\n    <p><strong>Bundle total: see cart — buying the set together saves more.</strong></p>\n    <p class="placeholder-note">${PLACEHOLDER_DISCLAIMER}</p>\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "sticky-atc":
+      return {
+        file,
+        markup: `<div style="position: sticky; bottom: 0; z-index: 50; background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 12px 20px; border-top: 1px solid #eee; box-shadow: 0 -4px 16px rgba(0,0,0,0.12);">\n  <div class="container" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">\n    <div><strong>{{ section.settings.heading | escape }}</strong><br><span>{{ section.settings.text | escape }}</span></div>\n    <button class="btn" data-add-to-cart>Add to Cart</button>\n  </div>\n</div>`,
+        schema: schemaFor(section, []),
+      };
+    case "delivery":
+      return {
+        file,
+        markup: `<section class="banner" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 24px 20px;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <p>{{ section.settings.text | escape }}</p>\n    <p><strong>Estimated delivery: 2–4 working days · Free shipping over $50.</strong></p>\n  </div>\n</section>`,
+        schema: schemaFor(section, []),
+      };
+    case "custom":
+      return {
+        file,
+        markup: `<section class="cta" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; padding: 40px 20px;">\n  <div class="container">\n    <h2>{{ section.settings.heading | escape }}</h2>\n    <style>{{ section.settings.custom_css }}</style>\n    {{ section.settings.custom_html }}\n    <script>{{ section.settings.custom_js }}</script>\n  </div>\n</section>`,
+        schema: schemaFor(section, [
+          { type: "textarea", id: "custom_html", label: "Custom HTML", default: section.customHtml ?? "" },
+          { type: "textarea", id: "custom_css", label: "Custom CSS", default: section.customCss ?? "" },
+          { type: "textarea", id: "custom_js", label: "Custom JavaScript", default: section.customJs ?? "" },
+        ]),
+      };
   }
 }
 
@@ -273,10 +397,71 @@ function buildLayout(project: Project): string {
 `;
 }
 
-function templateForPage(page: Page, fallbackTypes: SectionType[]): string {
+/**
+ * Per-page SEO (Cut B #13) emitted into a template file. Shopify renders
+ * templates/*.liquid inside layout/theme.liquid, whose <head> already
+ * emits <title>{{ page_title }}</title> — so the template carries the
+ * page's SEO as: a comment block (title + handle + robots, for the
+ * merchant and for verification), a real <meta name="description"> tag,
+ * and a robots noindex tag when set. No new files — the zip still
+ * holds 27 entries (20 files + 7 folder entries).
+ */
+function seoBlockForPage(page: Page): string {
+  const seo = page.seo;
+  if (!seo || (!seo.title && !seo.description && !seo.handle && !seo.noindex)) return "";
+  const lines: string[] = [
+    `{% comment %}`,
+    `  SEO for "${esc(page.title)}" (handle: ${esc(seo.handle || page.slug)}).`,
+  ];
+  if (seo.title) lines.push(`  Title: ${esc(seo.title)}`);
+  if (seo.description) lines.push(`  Description: ${esc(seo.description)}`);
+  lines.push(`  Robots: ${seo.noindex ? "noindex" : "index"}.`);
+  lines.push(`{% endcomment %}`);
+  if (seo.description) {
+    lines.push(`<meta name="description" content="${esc(seo.description)}">`);
+  }
+  if (seo.noindex) {
+    lines.push(`<meta name="robots" content="noindex">`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function templateForPage(
+  page: Page,
+  fallbackTypes: SectionType[],
+  globalFiles: ReadonlySet<string> = new Set(),
+): string {
   const types = page.sections.length > 0 ? page.sections.map((s) => s.type) : fallbackTypes;
-  const lines = types.map((t) => `{% section '${sectionFileName(t)}' %}`);
-  return `{% comment %}\n  Template for "${esc(page.title)}" (${esc(page.slug)}).\n  ${PLACEHOLDER_DISCLAIMER}\n{% endcomment %}\n${lines.join("\n")}\n`;
+  // One {% section %} line per liquid FILE, not per section type — cta +
+  // custom both render from sections/cta.liquid, so listing it twice would
+  // render the merged file twice.
+  const seenFiles = new Set<string>();
+  const lines: string[] = [];
+  for (const t of types) {
+    const f = sectionFileName(t);
+    if (seenFiles.has(f)) continue;
+    seenFiles.add(f);
+    lines.push(`{% section '${f}' %}`);
+  }
+  // Cut C #28: global sections are referenced from EVERY template, not
+  // just the pages that carry a copy. Header/footer are excluded — the
+  // layout already renders them on every page.
+  for (const f of globalFiles) {
+    if (f === "header" || f === "footer") continue;
+    if (seenFiles.has(f)) continue;
+    seenFiles.add(f);
+    lines.push(`{% section '${f}' %}`);
+  }
+  return `{% comment %}\n  Template for "${esc(page.title)}" (${esc(page.slug)}).\n  ${PLACEHOLDER_DISCLAIMER}\n{% endcomment %}\n${seoBlockForPage(page)}${lines.join("\n")}\n`;
+}
+
+/** Cut C #28: {% section %} lines for global sections (shared helper for
+ *  the fallback templates below, which are built as plain strings). */
+function globalSectionLines(globalFiles: ReadonlySet<string>): string {
+  return [...globalFiles]
+    .filter((f) => f !== "header" && f !== "footer")
+    .map((f) => `{% section '${f}' %}`)
+    .join("\n");
 }
 
 function buildSettingsSchema(project: Project): string {
@@ -379,17 +564,55 @@ export function buildShopifyThemeFiles(project: Project): ThemeFiles {
   files["assets/theme.css"] = buildThemeCss(project);
   files["assets/theme.js"] = buildThemeJs();
 
-  // Sections: har section type ek dafa, pehle milne wale section ka data le kar.
-  // (Shopify me ek section file ek dafa hoti hai; alag pages usi ko reuse karte hain.)
-  const seen = new Set<SectionType>();
+  // Sections: one liquid FILE per target file — but when several sections
+  // map to the same file (cta + custom -> cta.liquid, testimonials + faq
+  // -> features.liquid), their rendered Liquid is CONCATENATED into that
+  // one file, in section order, with prefixed schema settings — never
+  // dropped. (Shopify me ek section file ek dafa hoti hai; alag pages usi
+  // ko reuse karte hain.) No new files are added: the zip still holds
+  // 27 entries (20 files + 7 folder entries).
+  //
+  // Cut C #28 (Global sections): a section with global=true + globalKey
+  // is ONE logical section. Later copies with the same globalKey are
+  // skipped, so its Liquid is emitted exactly once; every template then
+  // references its file (see templateForPage + globalFiles below).
+  // Limitation, stated honestly: "once" is per target FILE, not per
+  // section — two DIFFERENT global sections that map to the same file
+  // (e.g. a global cta + a global custom block, both -> cta.liquid) are
+  // still merged into that one file, as all same-file sections are.
+  const seenFiles = new Set<string>();
+  const merged = new Map<
+    string,
+    { markups: string[]; schema: Record<string, unknown>; types: string[] }
+  >();
+  const seenGlobalKeys = new Set<string>();
+  const globalFiles = new Set<string>();
   const allSections: Section[] = project.pages.flatMap((p) => p.sections);
   for (const section of allSections) {
-    if (seen.has(section.type)) continue;
-    seen.add(section.type);
+    if (section.global && section.globalKey) {
+      if (seenGlobalKeys.has(section.globalKey)) continue;
+      seenGlobalKeys.add(section.globalKey);
+      globalFiles.add(sectionFileName(section.type));
+    }
     const def = buildSectionDef(section, project);
-    files[`sections/${def.file}.liquid`] = sectionLiquid(
-      def,
-      `Section: ${section.type} — project "${project.name}".`,
+    seenFiles.add(def.file);
+    const entry = merged.get(def.file);
+    if (!entry) {
+      merged.set(def.file, {
+        markups: [def.markup],
+        schema: def.schema,
+        types: [section.type],
+      });
+    } else {
+      entry.types.push(section.type);
+      mergeSectionDef(entry, def, section);
+    }
+  }
+  for (const [file, entry] of merged) {
+    files[`sections/${file}.liquid`] = sectionLiquidMerged(
+      entry.markups,
+      entry.schema,
+      `Sections: ${entry.types.join(", ")} — project "${project.name}".`,
     );
   }
   // Header/footer hamesha hon — layout in ko refer karta hai.
@@ -406,7 +629,7 @@ export function buildShopifyThemeFiles(project: Project): ThemeFiles {
     padding: 16,
   });
   for (const type of ["header", "footer"] as SectionType[]) {
-    if (!seen.has(type)) {
+    if (!seenFiles.has(sectionFileName(type))) {
       const def = buildSectionDef(fallbackSection(type), project);
       files[`sections/${def.file}.liquid`] = sectionLiquid(def, `Section: ${type} (default, project me nahi tha).`);
     }
@@ -414,15 +637,15 @@ export function buildShopifyThemeFiles(project: Project): ThemeFiles {
 
   // Templates
   const home = homePage(project);
-  files["templates/index.liquid"] = templateForPage(home, ["hero", "category", "product", "features"]);
+  files["templates/index.liquid"] = templateForPage(home, ["hero", "category", "product", "features"], globalFiles);
   const productPage = findPage(project, "product") ?? findPage(project, "products");
   files["templates/product.liquid"] = productPage
-    ? templateForPage(productPage, ["product", "features"])
-    : `{% comment %} Product template — placeholder products. ${PLACEHOLDER_DISCLAIMER} {% endcomment %}\n{% section 'product-grid' %}\n{% section 'features' %}\n`;
+    ? templateForPage(productPage, ["product", "features"], globalFiles)
+    : `{% comment %} Product template — placeholder products. ${PLACEHOLDER_DISCLAIMER} {% endcomment %}\n{% section 'product-grid' %}\n{% section 'features' %}\n${globalSectionLines(globalFiles)}\n`;
   const collectionPage = findPage(project, "collection") ?? findPage(project, "collections");
   files["templates/collection.liquid"] = collectionPage
-    ? templateForPage(collectionPage, ["category", "product"])
-    : `{% comment %} Collection template — placeholder content. ${PLACEHOLDER_DISCLAIMER} {% endcomment %}\n{% section 'category-grid' %}\n{% section 'product-grid' %}\n`;
+    ? templateForPage(collectionPage, ["category", "product"], globalFiles)
+    : `{% comment %} Collection template — placeholder content. ${PLACEHOLDER_DISCLAIMER} {% endcomment %}\n{% section 'category-grid' %}\n{% section 'product-grid' %}\n${globalSectionLines(globalFiles)}\n`;
 
   // Snippets / config / locales
   files["snippets/product-card.liquid"] = PRODUCT_CARD_SNIPPET;

@@ -5,7 +5,10 @@
 
 import { useRef } from "react";
 import type { Align, ElementKey, Section } from "@/lib/sections";
+import type { AnimationLevel, Theme } from "@/lib/types";
+import { ALLOWED_ENTRANCES, capEntrance } from "@/lib/types";
 import { placeholderImage } from "@/lib/sections";
+import { regenerateImageUrl, seedFromImageUrl } from "@/lib/media";
 
 export interface EditPanelProps {
   section: Section | null;
@@ -13,10 +16,35 @@ export interface EditPanelProps {
   onElementChange: (el: ElementKey) => void;
   onPatch: (patch: Partial<Section>) => void;
   onClose: () => void;
+  /** Cut C #22: project theme — needed for the Animation Level select. */
+  theme?: Theme | null;
+  /** Cut C #22: called with the new theme when Animation Level changes. */
+  onThemeChange?: (theme: Theme) => void;
 }
 
 const FIELD =
   "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
+
+const ENTRANCE_OPTIONS = [
+  { id: "none", label: "None" },
+  { id: "fade", label: "Fade" },
+  { id: "slide-up", label: "Slide up" },
+  { id: "zoom", label: "Zoom" },
+  { id: "slide-left", label: "Slide in from right" },
+] as const;
+
+const HOVER_OPTIONS = [
+  { id: "none", label: "None" },
+  { id: "lift", label: "Lift" },
+  { id: "scale", label: "Scale" },
+] as const;
+
+const ANIMATION_LEVELS: { id: AnimationLevel; label: string; hint: string }[] = [
+  { id: "none", label: "None", hint: "No motion anywhere" },
+  { id: "low", label: "Low", hint: "Fade only" },
+  { id: "medium", label: "Medium", hint: "Fade + slide up" },
+  { id: "high", label: "High", hint: "All entrances" },
+];
 
 export default function EditPanel({
   section: s,
@@ -24,14 +52,46 @@ export default function EditPanel({
   onElementChange,
   onPatch,
   onClose,
+  theme,
+  onThemeChange,
 }: EditPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!s) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
-        Kisi section par click karo — uske text, rang, image aur spacing yahan edit
-        honge. Preview me change foran nazar aayega.
+      <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
+        <p>
+          Kisi section par click karo — uske text, rang, image aur spacing yahan edit
+          honge. Preview me change foran nazar aayega.
+        </p>
+        {theme && onThemeChange ? (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-600">
+              Animation Level (whole theme)
+            </span>
+            <select
+              value={theme.animationLevel ?? "medium"}
+              onChange={(e) =>
+                onThemeChange({
+                  ...theme,
+                  animationLevel: e.target.value as AnimationLevel,
+                })
+              }
+              className={FIELD}
+              aria-label="Theme animation level"
+            >
+              {ANIMATION_LEVELS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label} — {l.hint}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-gray-500">
+              Low = fade only, Medium = fade + slide up, High = all entrances,
+              None = no motion.
+            </span>
+          </label>
+        ) : null}
       </div>
     );
   }
@@ -138,7 +198,23 @@ export default function EditPanel({
             >
               New image
             </button>
+            {s.image ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onPatch({ image: regenerateImageUrl(seedFromImageUrl(s.image ?? "")) })
+                }
+                title="Fresh placeholder photo (picsum) — AI image nahi"
+                className="rounded-md border border-violet-600 px-3 py-1.5 text-xs font-medium text-violet-700"
+              >
+                Regenerate image
+              </button>
+            ) : null}
           </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Regenerate se fresh placeholder photo milti hai (picsum) — AI se
+            bani image nahi.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -220,6 +296,114 @@ export default function EditPanel({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* ---- Cut C #22: per-section animation + theme animation level ---- */}
+        <div className="space-y-3 border-t border-gray-100 pt-3">
+          <span className="block text-xs font-semibold text-gray-600">Animation</span>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-600">Entrance</span>
+            <select
+              value={s.animation?.entrance ?? "none"}
+              onChange={(e) => {
+                const entrance = e.target.value as
+                  | "none"
+                  | "fade"
+                  | "slide-up"
+                  | "zoom"
+                  | "slide-left";
+                onPatch({
+                  animation: {
+                    ...s.animation,
+                    entrance: capEntrance(entrance, theme?.animationLevel),
+                  },
+                });
+              }}
+              className={FIELD}
+              aria-label="Entrance animation"
+            >
+              {ENTRANCE_OPTIONS.map((o) => {
+                const allowed = (
+                  ALLOWED_ENTRANCES[theme?.animationLevel ?? "medium"] as readonly string[]
+                ).includes(o.id);
+                return (
+                  <option key={o.id} value={o.id} disabled={!allowed}>
+                    {o.label}
+                    {allowed ? "" : " (blocked by Animation Level)"}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 flex justify-between text-xs font-semibold text-gray-600">
+              <span>Entrance delay</span>
+              <span>{s.animation?.delayMs ?? 0}ms</span>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={600}
+              step={50}
+              value={s.animation?.delayMs ?? 0}
+              onChange={(e) =>
+                onPatch({ animation: { ...s.animation, delayMs: Number(e.target.value) } })
+              }
+              className="w-full"
+              aria-label="Entrance delay in milliseconds"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-600">Hover effect</span>
+            <select
+              value={s.animation?.hover ?? "none"}
+              onChange={(e) =>
+                onPatch({
+                  animation: {
+                    ...s.animation,
+                    hover: e.target.value as "none" | "lift" | "scale",
+                  },
+                })
+              }
+              className={FIELD}
+              aria-label="Hover effect"
+            >
+              {HOVER_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {theme && onThemeChange ? (
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-gray-600">
+                Animation Level (whole theme)
+              </span>
+              <select
+                value={theme.animationLevel ?? "medium"}
+                onChange={(e) =>
+                  onThemeChange({
+                    ...theme,
+                    animationLevel: e.target.value as AnimationLevel,
+                  })
+                }
+                className={FIELD}
+                aria-label="Theme animation level"
+              >
+                {ANIMATION_LEVELS.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label} — {l.hint}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] text-gray-500">
+                Caps what renders: Low = fade only, Medium = fade + slide up,
+                High = all entrances, None = no motion. Sections above the cap
+                fall back to fade.
+              </span>
+            </label>
+          ) : null}
         </div>
 
         <div className="flex gap-4 border-t border-gray-100 pt-3 text-sm">

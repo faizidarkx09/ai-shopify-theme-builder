@@ -8,6 +8,7 @@
 // streaming hi spec hai. Original code.
 
 import type {
+  CsvProduct,
   GenerateEvent,
   GenerateInput,
   Page,
@@ -18,6 +19,9 @@ import type {
 import { deriveTheme, slugify, uid } from '../theme';
 import { buildPageFromTemplate, detectPageType, FALLBACK_IMAGE, imageUrl } from '../templates';
 import { generateWithGemini, hasGeminiKey } from './gemini';
+import { demoProductsForPrompt } from '../demoCatalog';
+import { applyBrandKitToTheme } from '../brandKit';
+import type { PlanSection, SitePlan } from './plan';
 
 export type GenerationMode = 'gemini' | 'template';
 
@@ -60,8 +64,62 @@ export function completeSections(
 }
 
 export function resolvePageType(input: GenerateInput): PageType {
+  if (input.plan) {
+    const idx = Math.max(0, Math.min(input.planPageIndex ?? 0, input.plan.pages.length - 1));
+    return input.plan.pages[idx].pageType;
+  }
   if (input.pageType) return input.pageType;
   return detectPageType(input.prompt);
+}
+
+/**
+ * Products for the product sections: the project's real csvProducts when
+ * the caller passes them, otherwise the demo catalog for the prompt's
+ * niche (clearly labelled demo data — see lib/demoCatalog.ts).
+ */
+export function resolveProducts(input: GenerateInput): CsvProduct[] {
+  if (input.products && input.products.length > 0) return input.products;
+  return demoProductsForPrompt(input.prompt);
+}
+
+/**
+ * Shape a candidate section list to the plan's skeleton: keep only the
+ * section types the plan lists, in the plan's order; reuse a matching
+ * candidate section when one exists (plan title wins, except header/footer
+ * where the candidate carries the store name); otherwise build a minimal
+ * section from the plan entry. Sections the plan dropped are dropped.
+ */
+export function applyPlanSections(
+  candidates: Section[],
+  planSections: PlanSection[],
+  theme: Theme,
+  pageSlug: string,
+): Section[] {
+  const pool = new Map<string, Section[]>();
+  for (const s of candidates) {
+    const list = pool.get(s.type) ?? [];
+    list.push(s);
+    pool.set(s.type, list);
+  }
+  const built: Section[] = [];
+  for (const spec of planSections) {
+    const match = pool.get(spec.type)?.shift();
+    if (match) {
+      // Header/footer titles are the store name — plan titles there are
+      // just generic labels ("Header"), so keep the candidate's title.
+      const keepTitle = spec.type === 'header' || spec.type === 'footer';
+      built.push(keepTitle ? match : { ...match, title: spec.title || match.title });
+    } else {
+      built.push(
+        ...completeSections(
+          [{ type: spec.type, title: spec.title }],
+          theme,
+          pageSlug,
+        ),
+      );
+    }
+  }
+  return built;
 }
 
 /** Image URL kharab ho to fallback — editor/preview isay use kar sakta hai. */
@@ -83,32 +141,50 @@ export async function* generatePageEvents(
     yield { type: 'error', message: 'Prompt khali hai — pehle prompt likho.' };
     return;
   }
-  const pageType = resolvePageType(input);
-  const theme = input.theme ?? deriveTheme(prompt);
+  // Plan present ho to plan hi source of truth hai: uska theme, uska page
+  // (slug/title/type/sections). Bina plan ke purana behaviour — kuch nahi
+  // badla, purane callers bilkul waisay hi chalte hain.
+  const plan: SitePlan | undefined = input.plan;
+  const planPage = plan
+    ? plan.pages[Math.max(0, Math.min(input.planPageIndex ?? 0, plan.pages.length - 1))]
+    : undefined;
+  const pageType = planPage ? planPage.pageType : resolvePageType(input);
+  // Cut B #10 — brand kit overrides the theme BEFORE generation: the
+  // base theme is the plan theme when a plan is present, else the
+  // caller-supplied theme, else the prompt-derived theme. The theme event
+  // below therefore already carries the kit, so later pages inherit it.
+  const baseTheme = plan && planPage ? plan.theme : (input.theme ?? deriveTheme(prompt));
+  const theme = applyBrandKitToTheme(baseTheme, input.brandKit);
   yield { type: 'theme', theme };
 
-  const title = input.pageTitle?.trim();
+  const title = planPage ? planPage.title : input.pageTitle?.trim();
   // Slug pageTitle/pageType se banta hai — prompt ke pehle alfaz se nahi,
   // warna har prompt ka slug alag aur be-tarteeb hota.
   const defaultTitle =
     pageType === 'home' ? 'Home' : pageType === 'product' ? 'Product Detail' : 'Category';
   const defaultSlug =
     pageType === 'home' ? 'home' : pageType === 'product' ? 'product-detail' : 'category';
-  const pageSlug = title ? slugify(title) : defaultSlug;
+  const pageSlug = planPage ? planPage.slug : title ? slugify(title) : defaultSlug;
   const pageTitle = title || defaultTitle;
+  const products = resolveProducts(input);
 
   let sections: Section[];
   if (hasGeminiKey()) {
-    const raw = await generateWithGemini(prompt, theme, pageType);
+    const raw = await generateWithGemini(prompt, theme, pageType, products);
     if (raw && raw.length > 0) {
       sections = completeSections(raw, theme, pageSlug);
     } else {
       // Gemini fail ho gaya to chup-chaap template par gir jao, user ko
       // khali page kabhi mat do.
-      sections = buildPageFromTemplate(prompt, theme, pageType, pageTitle).sections;
+      sections = buildPageFromTemplate(prompt, theme, pageType, pageTitle, products).sections;
     }
   } else {
-    sections = buildPageFromTemplate(prompt, theme, pageType, pageTitle).sections;
+    sections = buildPageFromTemplate(prompt, theme, pageType, pageTitle, products).sections;
+  }
+
+  // Plan ka skeleton lagao: sirf plan wale sections, plan ki order me.
+  if (planPage) {
+    sections = applyPlanSections(sections, planPage.sections, theme, pageSlug);
   }
 
   const page: Page = {

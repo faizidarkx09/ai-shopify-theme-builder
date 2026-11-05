@@ -4,7 +4,7 @@
 // grocery — baaki niches ke liye generic fallback. Images: picsum.photos
 // seeded placeholders + fallback, koi ImageKit key nahi. Original code.
 
-import type { Page, PageType, Section, SectionType, Theme } from './ai/types';
+import type { CsvProduct, Page, PageType, Section, SectionType, Theme } from './ai/types';
 import { detectNiche, slugify, uid, type Niche } from './theme';
 
 export const FALLBACK_IMAGE = 'https://picsum.photos/seed/fallback/1200/800';
@@ -154,9 +154,125 @@ function makeSection(
   };
 }
 
+/**
+ * Product lines for a "product" section.
+ * When real products are passed (project csvProducts, or the demo catalog
+ * when none exist — see lib/ai/generate.ts) they replace the built-in
+ * niche placeholder lines. No products passed = existing placeholder
+ * behaviour, unchanged.
+ */
+export function productLines(
+  products: CsvProduct[] | undefined,
+  fallback: string[],
+): string[] {
+  if (!products || products.length === 0) return fallback;
+  return products
+    .slice(0, 4)
+    .map((p) => `${p.name} — $${p.price}`);
+}
+
+// ---------------------------------------------------------------------------
+// CRO section pack (Cut B #12) — sensible defaults for conversion sections.
+// When the template builder (or the section library) encounters one of
+// these types, buildCroSection fills it in: countdown target = now + 48h
+// in meta.countdownTarget; bundle uses the passed products; sticky-atc
+// uses the first product's price; delivery states the 2–4 business day
+// window. All other template behaviour is byte-identical — the existing
+// home/product/category builders below are untouched.
+// ---------------------------------------------------------------------------
+
+/** CRO section types with filled-in defaults. */
+export type CroSectionType =
+  | 'countdown'
+  | 'bundle'
+  | 'sticky-atc'
+  | 'trust-badges'
+  | 'delivery';
+
+/** Countdown target = now + 48h, ISO string. */
+export function countdownTarget48h(from: Date = new Date()): string {
+  return new Date(from.getTime() + 48 * 3600 * 1000).toISOString();
+}
+
+/**
+ * Build one CRO section with sensible defaults. `products` (optional):
+ * the project's csvProducts / demo catalog — bundle lists the first
+ * three, sticky-atc prices the first one. No products = placeholder
+ * copy, same as the rest of the template builder.
+ */
+export function buildCroSection(
+  type: CroSectionType,
+  theme: Theme,
+  pageSlug: string,
+  index: number,
+  products?: CsvProduct[],
+): Section {
+  switch (type) {
+    case 'countdown':
+      return makeSection('countdown', pageSlug, index, theme, {
+        title: 'Sale Ends Soon',
+        subtitle: '',
+        text: 'Up to 40% off — when the timer hits zero, prices go back up.',
+        align: 'center',
+        meta: { countdownTarget: countdownTarget48h() },
+      });
+    case 'bundle': {
+      const lines = productLines(products, [
+        'Bundle item 1 — $19',
+        'Bundle item 2 — $24',
+        'Bundle item 3 — $29',
+      ]);
+      const total = (products?.slice(0, 3) ?? []).reduce((n, p) => n + p.price, 0);
+      return makeSection('bundle', pageSlug, index, theme, {
+        title: 'Bundle & Save',
+        subtitle: '',
+        text:
+          lines.slice(0, 3).join('\n') +
+          (total > 0
+            ? `\nBundle total: $${total} — buying the set together saves more.`
+            : '\nBundle total: $59.97 — buying the set together saves more.'),
+        align: 'center',
+      });
+    }
+    case 'sticky-atc': {
+      const first = products?.[0];
+      return makeSection('sticky-atc', pageSlug, index, theme, {
+        title: first ? `${first.name} — $${first.price}` : 'Featured Product — $29',
+        subtitle: '',
+        text: 'In stock — ships within 24 hours.',
+        image: '',
+        align: 'left',
+        padding: '16px 24px',
+      });
+    }
+    case 'trust-badges':
+      return makeSection('trust-badges', pageSlug, index, theme, {
+        title: 'Shop With Confidence',
+        subtitle: '',
+        text: 'Secure checkout · 30-day returns · Fast delivery · Real support.',
+        align: 'center',
+        padding: '32px 24px',
+      });
+    case 'delivery':
+      return makeSection('delivery', pageSlug, index, theme, {
+        title: 'Fast, Tracked Delivery',
+        subtitle: '',
+        text: 'Estimated delivery: 2–4 business days. Free shipping over $50.',
+        align: 'left',
+        padding: '32px 24px',
+      });
+  }
+}
+
 /** Homepage (8 sections) — Cut 1 ka pehla page. */
-function homeSections(theme: Theme, niche: Niche, pageSlug: string): Section[] {
+function homeSections(
+  theme: Theme,
+  niche: Niche,
+  pageSlug: string,
+  products?: CsvProduct[],
+): Section[] {
   const c = CONTENT[niche];
+  const productText = productLines(products, c.products);
   return [
     makeSection('header', pageSlug, 0, theme, {
       title: c.storeName,
@@ -192,7 +308,7 @@ function homeSections(theme: Theme, niche: Niche, pageSlug: string): Section[] {
     makeSection('product', pageSlug, 4, theme, {
       title: 'Best Sellers',
       subtitle: 'Loved by our customers.',
-      text: c.products.join('\n'),
+      text: productText.join('\n'),
     }),
     makeSection('features', pageSlug, 5, theme, {
       title: 'Why Shop With Us',
@@ -220,8 +336,14 @@ function homeSections(theme: Theme, niche: Niche, pageSlug: string): Section[] {
   ];
 }
 
-function productSections(theme: Theme, niche: Niche, pageSlug: string): Section[] {
+function productSections(
+  theme: Theme,
+  niche: Niche,
+  pageSlug: string,
+  products?: CsvProduct[],
+): Section[] {
   const c = CONTENT[niche];
+  const productText = productLines(products, c.products);
   return [
     makeSection('header', pageSlug, 0, theme, {
       title: c.storeName,
@@ -234,7 +356,7 @@ function productSections(theme: Theme, niche: Niche, pageSlug: string): Section[
       padding: '16px 24px',
     }),
     makeSection('hero', pageSlug, 1, theme, {
-      title: c.products[0],
+      title: productText[0],
       subtitle: 'In stock — ships within 24 hours.',
       text: 'Add to cart',
       bgColor: theme.colors.primary,
@@ -266,8 +388,14 @@ function productSections(theme: Theme, niche: Niche, pageSlug: string): Section[
   ];
 }
 
-function categorySections(theme: Theme, niche: Niche, pageSlug: string): Section[] {
+function categorySections(
+  theme: Theme,
+  niche: Niche,
+  pageSlug: string,
+  products?: CsvProduct[],
+): Section[] {
   const c = CONTENT[niche];
+  const productText = productLines(products, c.products);
   return [
     makeSection('header', pageSlug, 0, theme, {
       title: c.storeName,
@@ -294,7 +422,7 @@ function categorySections(theme: Theme, niche: Niche, pageSlug: string): Section
     makeSection('product', pageSlug, 3, theme, {
       title: `Best in ${c.categories[0]}`,
       subtitle: '',
-      text: c.products.join('\n'),
+      text: productText.join('\n'),
     }),
     makeSection('footer', pageSlug, 4, theme, {
       title: c.storeName,
@@ -317,22 +445,26 @@ const PAGE_TITLES: Record<PageType, string> = {
 /**
  * Demo-mode page builder — bina AI key ke. Page type ke hisab se
  * homepage / product detail / category page banata hai.
+ * `products` (optional): real products for the product sections — the
+ * project's csvProducts when they exist, else the demo catalog. Omitted =
+ * the built-in niche placeholder lines (existing behaviour).
  */
 export function buildPageFromTemplate(
   prompt: string,
   theme: Theme,
   pageType: PageType = 'home',
   pageTitle?: string,
+  products?: CsvProduct[],
 ): Page {
   const niche = detectNiche(prompt);
   const title = pageTitle?.trim() || PAGE_TITLES[pageType];
   const pageSlug = slugify(title) || pageType;
   const sections =
     pageType === 'product'
-      ? productSections(theme, niche, pageSlug)
+      ? productSections(theme, niche, pageSlug, products)
       : pageType === 'category'
-        ? categorySections(theme, niche, pageSlug)
-        : homeSections(theme, niche, pageSlug);
+        ? categorySections(theme, niche, pageSlug, products)
+        : homeSections(theme, niche, pageSlug, products);
   return { id: uid('page'), slug: pageSlug, title, sections };
 }
 

@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import "./mobile.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,6 +18,13 @@ export const metadata: Metadata = {
   title: "AI Shopify Theme Builder — Prompt se Shopify theme banao",
   description:
     "Prompt likho, AI pehle consistent theme banata hai, phir page-by-page streaming preview, section-wise edit, aur Shopify theme zip export. Original demo build — placeholder content, test-mode billing.",
+};
+
+/** Mobile viewport + brand theme-color (Cut C mobile pass). */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#db2777",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

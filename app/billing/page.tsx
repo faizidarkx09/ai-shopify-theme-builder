@@ -23,28 +23,68 @@ import {
 import { getOrCreateDemoUser } from '../../lib/auth';
 import { getProjectStore } from '../../lib/db/store';
 import PlanCard from '../../components/billing/PlanCard';
-import UsageCounter from '../../components/billing/UsageCounter';
+import UsageCounter, { type AggregateCredits } from '../../components/billing/UsageCounter';
 import UpgradePopup from '../../components/billing/UpgradePopup';
+import {
+  CREDIT_ACTION_LABELS,
+  CREDIT_COSTS,
+  getCredits,
+  type CreditAction,
+} from '../../lib/credits';
+import type { Project } from '../../lib/types';
+
+/** Sum credits across all projects (Cut B #14). Paid plan → Unlimited. */
+export function aggregateCredits(projects: Project[]): AggregateCredits {
+  const paid = getBillingState().planId !== 'free';
+  let totalBalance = 0;
+  let totalUsed = 0;
+  const history: AggregateCredits['recentHistory'] = [];
+  for (const p of projects) {
+    const c = getCredits(p);
+    if (Number.isFinite(c.balance)) totalBalance += c.balance;
+    totalUsed += c.used;
+    for (const h of p.credits?.history ?? []) {
+      history.push({
+        projectName: p.name,
+        action: CREDIT_ACTION_LABELS[h.action as CreditAction] ?? h.action,
+        cost: h.cost,
+        createdAt: h.createdAt,
+      });
+    }
+  }
+  history.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return {
+    totalBalance: paid ? Number.POSITIVE_INFINITY : totalBalance,
+    totalUsed,
+    projectCount: projects.length,
+    recentHistory: history.slice(0, 5),
+  };
+}
 
 export default function BillingPage() {
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [usage, setUsage] = useState<ProjectUsage | null>(null);
+  const [credits, setCredits] = useState<AggregateCredits | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupReason, setPopupReason] = useState('');
 
   useEffect(() => {
     const state = getBillingState();
     const user = getOrCreateDemoUser();
-    const count = getProjectStore().count(user.id);
+    const store = getProjectStore();
+    const count = store.count(user.id);
     setBilling(state);
     setUsage(getProjectUsage(state.planId, count));
+    setCredits(aggregateCredits(store.list(user.id) as Project[]));
   }, []);
 
   const refresh = (state: BillingState) => {
     const user = getOrCreateDemoUser();
-    const count = getProjectStore().count(user.id);
+    const store = getProjectStore();
+    const count = store.count(user.id);
     setBilling(state);
     setUsage(getProjectUsage(state.planId, count));
+    setCredits(aggregateCredits(store.list(user.id) as Project[]));
   };
 
   const handleSelectPlan = (planId: PlanId) => {
@@ -87,7 +127,34 @@ export default function BillingPage() {
       </p>
 
       <section style={{ marginBottom: 24, maxWidth: 360 }}>
-        <UsageCounter usage={usage} />
+        <UsageCounter usage={usage} credits={credits ?? undefined} />
+      </section>
+
+      <section
+        style={{
+          border: '1px solid #d1d5db',
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 24,
+        }}
+      >
+        <h2 style={{ margin: '0 0 4px' }}>AI credit costs — TEST MODE ONLY</h2>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6b7280' }}>
+          Ye costs test-mode numbers hain — asli payment nahi, sirf demo
+          balance. Free project 100 test credits se shuru hota hai; paid
+          plan me credits unlimited hain.
+        </p>
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
+          {(Object.keys(CREDIT_COSTS) as CreditAction[]).map((action) => (
+            <li
+              key={action}
+              style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}
+            >
+              <span>{CREDIT_ACTION_LABELS[action]}</span>
+              <strong>{CREDIT_COSTS[action]} credits</strong>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section

@@ -1,7 +1,16 @@
 // app/api/generate/route.ts — Streaming generation API (Agent 2).
 // POST /api/generate
 //   body: { prompt: string, pageType?: "home"|"product"|"category",
-//           pageTitle?: string, theme?: Theme, projectId?: string }
+//           pageTitle?: string, theme?: Theme, projectId?: string,
+//           plan?: SitePlan, planPageIndex?: number,
+//           products?: CsvProduct[], brandKit?: BrandKit }
+//   When `plan` is present (approved plan gate, Cut A #1) the plan's theme
+//   and the plan page at `planPageIndex` (default 0) decide the page
+//   structure instead of re-deriving it. `products` are the project's
+//   csvProducts when they exist; otherwise the demo catalog fills product
+//   sections. Without `plan`/`products` the old behaviour is unchanged.
+//   `brandKit` (Cut B #10) is validated and applied to the theme before
+//   generation, so the theme event already carries the kit colours/font.
 //   response: text/event-stream (SSE) — events:
 //     data: {"type":"theme","theme":{...}}
 //     data: {"type":"section","section":{...},"index":0,"total":8}
@@ -13,7 +22,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePageEvents, getGenerationMode } from '../../../lib/ai/generate';
 import { getGeminiModel } from '../../../lib/ai/gemini';
-import type { PageType, Theme } from '../../../lib/ai/types';
+import { normalizePlan } from '../../../lib/ai/plan';
+import { normalizeBrandKit } from '../../../lib/brandKit';
+import type { CsvProduct, PageType, Theme } from '../../../lib/ai/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +35,10 @@ interface GenerateBody {
   pageTitle?: unknown;
   theme?: unknown;
   projectId?: unknown;
+  plan?: unknown;
+  planPageIndex?: unknown;
+  products?: unknown;
+  brandKit?: unknown;
 }
 
 function isPageType(value: unknown): value is PageType {
@@ -42,6 +57,18 @@ function isTheme(value: unknown): value is Theme {
     ['primary', 'secondary', 'background', 'text', 'accent'].every(
       (k) => typeof c[k] === 'string',
     )
+  );
+}
+
+/** csvProducts from the client: [{ name, price, description?, image? }]. */
+function isProducts(value: unknown): value is CsvProduct[] {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (p) =>
+      typeof p === 'object' &&
+      p !== null &&
+      typeof (p as { name?: unknown }).name === 'string' &&
+      typeof (p as { price?: unknown }).price === 'number',
   );
 }
 
@@ -76,6 +103,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const plan = normalizePlan(body.plan);
+  const planPageIndex =
+    typeof body.planPageIndex === 'number' &&
+    Number.isInteger(body.planPageIndex) &&
+    body.planPageIndex >= 0
+      ? body.planPageIndex
+      : undefined;
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -86,6 +121,10 @@ export async function POST(req: NextRequest) {
           pageTitle: typeof body.pageTitle === 'string' ? body.pageTitle : undefined,
           theme: isTheme(body.theme) ? body.theme : undefined,
           projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
+          plan: plan ?? undefined,
+          planPageIndex,
+          products: isProducts(body.products) ? body.products : undefined,
+          brandKit: normalizeBrandKit(body.brandKit) ?? undefined,
         })) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         }

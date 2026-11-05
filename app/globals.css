@@ -28,3 +28,29 @@ body {
 /* Tailwind v4 (CSS-first): no tailwind.config.js is needed for this app.
    Theme tokens live in @theme above; section previews use inline styles
    from the generated Theme so a project's colors apply directly. */
+
+/* Section entrance / hover motion (Wave 0 foundation for Cut C #22).
+   Keep animations short (<=0.6s) and transform/opacity-only so the
+   preview stays fast — Readymag's 12s-load warning applies here. */
+@keyframes stb-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes stb-slide-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes stb-zoom { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes stb-slide-left { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+
+.stb-anim-fade { animation: stb-fade 0.6s ease both; }
+.stb-anim-slide-up { animation: stb-slide-up 0.6s ease both; }
+.stb-anim-zoom { animation: stb-zoom 0.6s ease both; }
+.stb-anim-slide-left { animation: stb-slide-left 0.6s ease both; }
+.stb-hover-lift, .stb-hover-scale { transition: transform 0.2s ease; }
+.stb-hover-lift:hover { transform: translateY(-4px); }
+.stb-hover-scale:hover { transform: scale(1.02); }
+
+/* ---- Cut C #22 (APPENDED — do not reformat above): animation-level utilities ----
+   The entrance keyframes/classes above are unchanged. These utilities let the
+   preview honour Theme.animationLevel='none' and users who prefer reduced
+   motion. Transform/opacity only, <=0.6s, as above. */
+.stb-anim-off, .stb-anim-off * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .stb-anim-fade, .stb-anim-slide-up, .stb-anim-zoom, .stb-anim-slide-left { animation: none; }
+  .stb-hover-lift:hover, .stb-hover-scale:hover { transform: none; }
+}

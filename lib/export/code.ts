@@ -75,6 +75,40 @@ function renderSection(section: Section, project: Project): string {
         .join("")}</div></div></section>`;
     case "features":
       return `<section style="${style}"><div class="container">${heading}<div class="grid"><div><h3>Free shipping</h3>${text}</div><div><h3>Easy returns</h3><p>30-day returns on every order.</p></div><div><h3>Secure checkout</h3><p>Safe payments with Shopify checkout.</p></div></div></div></section>`;
+    case "testimonials":
+      return `<section style="${style}"><div class="container">${heading}${text}<div class="grid"><div class="card"><div class="card-body"><p>“Quality is excellent — delivery was fast and the product feels premium.”</p><p><strong>— Ayesha K.</strong> ★★★★★</p></div></div><div class="card"><div class="card-body"><p>“Ordered twice already. Support answered within minutes both times.”</p><p><strong>— Bilal R.</strong> ★★★★★</p></div></div><div class="card"><div class="card-body"><p>“Exactly as described. I recommend this store to all my friends.”</p><p><strong>— Sara M.</strong> ★★★★☆</p></div></div></div><p class="note">Placeholder reviews — replace with real customer quotes.</p></div></section>`;
+    case "faq":
+      return `<section style="${style}"><div class="container">${heading}${text}<div><h3>How fast is delivery?</h3><p>Orders ship within 24 hours and arrive in 2–4 working days.</p><h3>Can I return an item?</h3><p>Yes — easy returns within 30 days, no questions asked.</p><h3>Is checkout secure?</h3><p>Yes, payments go through Shopify's secure checkout.</p></div></div></section>`;
+    case "newsletter":
+      return `<section style="${style}"><div class="container">${heading}${text}<form onsubmit="return false"><input type="email" required placeholder="Your email address" style="padding:12px 20px;border-radius:999px;border:1px solid #ccc;min-width:260px"><button type="submit" class="btn">Subscribe</button></form><p class="note">Demo form — no emails are collected.</p></div></section>`;
+    case "announcement":
+      return `<div style="${style};padding:10px 20px;text-align:center;font-size:.9rem;font-weight:600">${esc(section.title)}</div>`;
+    case "countdown": {
+      const target = typeof section.meta?.countdownTarget === "string" ? section.meta.countdownTarget : "";
+      const fallbackMs = 48 * 3600 * 1000;
+      const parsed = target ? new Date(target).getTime() : NaN;
+      const diff = Number.isFinite(parsed) && parsed > Date.now() ? parsed - Date.now() : fallbackMs;
+      const mins = Math.floor(diff / 60000);
+      const days = Math.floor(mins / 1440);
+      const hours = Math.floor((mins % 1440) / 60);
+      const mm = mins % 60;
+      return `<section style="${style}"><div class="container">${heading}${text}<p style="font-size:1.5rem;font-weight:700">${days}d : ${String(hours).padStart(2, "0")}h : ${String(mm).padStart(2, "0")}m</p><p class="note">Static countdown snapshot at export time${target ? ` — target ${esc(target)}` : " — 48h default"}.</p></div></section>`;
+    }
+    case "trust-badges":
+      return `<section style="${style}"><div class="container">${heading}${text}<div class="grid"><div><h3>Secure checkout</h3><p>Safe payments</p></div><div><h3>30-day returns</h3><p>No questions asked</p></div><div><h3>Fast delivery</h3><p>Ships in 24 hours</p></div><div><h3>Real support</h3><p>We reply within a day</p></div></div></div></section>`;
+    case "bundle":
+      return `<section style="${style}"><div class="container">${heading}${text}<div class="grid">${[1, 2, 3]
+        .map(
+          (n) =>
+            `<div class="card"><img src="https://picsum.photos/seed/placeholder-bundle-${n}/600/600" alt="Placeholder bundle item ${n}"><div class="card-body"><h3>Bundle item ${n}</h3><p class="price">$19.99</p></div></div>`,
+        )
+        .join("")}</div><p><strong>Bundle total: $59.97</strong></p><p class="note">${PLACEHOLDER_DISCLAIMER}</p></div></section>`;
+    case "sticky-atc":
+      return `<div style="${style};position:sticky;bottom:0;z-index:50;padding:12px 20px;border-top:1px solid #eee;box-shadow:0 -4px 16px rgba(0,0,0,.12)"><div class="container" style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><strong>${esc(section.title)}</strong><br><span>${esc(section.text ?? "")}</span></div><a class="btn" href="#">Add to Cart</a></div></div>`;
+    case "delivery":
+      return `<section style="${style}"><div class="container">${heading}${text}<p><strong>Estimated delivery: 2–4 working days · Free shipping over $50.</strong></p></div></section>`;
+    case "custom":
+      return `<section style="${style}"><div class="container">${heading}<style>${section.customCss ?? ""}</style>${section.customHtml ?? ""}<script>${section.customJs ?? ""}</script></div></section>`;
     case "banner":
     case "cta":
     default:
@@ -86,6 +120,20 @@ function renderSection(section: Section, project: Project): string {
 export function renderPageHtml(page: Page, project: Project): string {
   const hasHeader = page.sections.some((s) => s.type === "header");
   const hasFooter = page.sections.some((s) => s.type === "footer");
+  // Per-page SEO (Cut B #13): seo.title overrides the <title>, and the
+  // meta description + robots tag go in <head>. No seo set = previous
+  // behaviour (page title + project name), byte-identical.
+  const seoTitle = page.seo?.title?.trim();
+  const seoDescription = page.seo?.description?.trim();
+  const seoHandle = page.seo?.handle?.trim();
+  const headTitle = seoTitle ? esc(seoTitle) : `${esc(page.title)} — ${esc(project.name)}`;
+  const headMeta = [
+    seoDescription ? `<meta name="description" content="${esc(seoDescription)}">` : "",
+    page.seo?.noindex ? `<meta name="robots" content="noindex">` : "",
+    seoHandle ? `<!-- URL handle: ${esc(seoHandle)} -->` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   const header = hasHeader ? "" : renderSection(
     { id: "auto-header", type: "header", title: project.name, subtitle: "", text: "", image: "", bgColor: project.theme.colors.background, textColor: project.theme.colors.text, align: "left", padding: 16 },
     project,
@@ -94,13 +142,24 @@ export function renderPageHtml(page: Page, project: Project): string {
     { id: "auto-footer", type: "footer", title: project.name, subtitle: "", text: "Thanks for visiting our store.", image: "", bgColor: project.theme.colors.background, textColor: project.theme.colors.text, align: "left", padding: 32 },
     project,
   );
+  // Cut C #28: a global section (same globalKey) rendered twice on one
+  // page would show twice in standalone HTML — keep the first copy only.
+  // (Across pages, each HTML file still carries its own copy: standalone
+  // pages have no shared {% section %} include to reference.)
+  const seenGlobalKeys = new Set<string>();
+  const dedupedSections = page.sections.filter((s) => {
+    if (!s.global || !s.globalKey) return true;
+    if (seenGlobalKeys.has(s.globalKey)) return false;
+    seenGlobalKeys.add(s.globalKey);
+    return true;
+  });
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(page.title)} — ${esc(project.name)}</title>
-<!-- ${PLACEHOLDER_DISCLAIMER} -->
+<title>${headTitle}</title>
+${headMeta ? `${headMeta}\n` : ""}<!-- ${PLACEHOLDER_DISCLAIMER} -->
 <style>
 ${inlineCss(project)}
 </style>
@@ -108,7 +167,7 @@ ${inlineCss(project)}
 <body>
 ${header}
 <main>
-${page.sections.map((s) => renderSection(s, project)).join("\n")}
+${dedupedSections.map((s) => renderSection(s, project)).join("\n")}
 </main>
 ${footer}
 </body>

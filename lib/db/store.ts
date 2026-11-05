@@ -20,6 +20,31 @@ export interface ProjectStore {
   update(id: string, patch: ProjectPatch): Project | null;
   delete(id: string): boolean;
   clear(): void;
+  /**
+   * Cut C #27 — duplicate a project into a new one (new id + timestamps).
+   * Keeps pages/theme/brandKit/csvProducts/funnelOrder; RESETS versions
+   * and comments (a copy starts clean) and messages (single user message
+   * with the original prompt). `overrides` may rename it and/or mark it
+   * as a template; by default the copy is a plain project
+   * (isTemplate=false, templateName cleared) named "<name> (copy)".
+   */
+  duplicateProject(id: string, overrides?: DuplicateOverrides): Project | null;
+  /**
+   * Cut C #27 — save a project as a reusable named template: duplicates
+   * it with isTemplate=true + templateName. Returns null when the id
+   * does not exist or the name is blank.
+   */
+  saveAsTemplate(id: string, templateName: string): Project | null;
+}
+
+/** Overrides for duplicateProject (Cut C #27). */
+export interface DuplicateOverrides {
+  /** Display name for the copy (default "<source name> (copy)"). */
+  name?: string;
+  /** Mark the copy as a template (default false). */
+  isTemplate?: boolean;
+  /** Template display name (only kept when isTemplate is true). */
+  templateName?: string;
 }
 
 export function createProjectId(): string {
@@ -127,6 +152,63 @@ export class MemoryProjectStore implements ProjectStore {
     return this.items.delete(id);
   }
 
+  duplicateProject(id: string, overrides?: DuplicateOverrides): Project | null {
+    const source = this.items.get(id);
+    if (!source) return null;
+    const stamp = nowIso();
+    const isTemplate = overrides?.isTemplate ?? false;
+    const templateName = isTemplate
+      ? overrides?.templateName?.trim() ||
+        source.templateName?.trim() ||
+        source.name
+      : undefined;
+    // JSON round-trip = deep clone of the kept data (pages/theme are
+    // plain JSON). Versions + comments are deliberately NOT copied: a
+    // duplicate starts with no history and no comment pins.
+    const copy: Project = {
+      id: createProjectId(),
+      ownerId: source.ownerId,
+      name:
+        overrides?.name?.trim() ||
+        (isTemplate ? (templateName ?? source.name) : `${source.name} (copy)`),
+      prompt: source.prompt,
+      theme: JSON.parse(JSON.stringify(source.theme)) as Project['theme'],
+      pages: JSON.parse(JSON.stringify(source.pages)) as Project['pages'],
+      messages: [
+        {
+          id: createSectionId(),
+          role: 'user',
+          text: source.prompt,
+          createdAt: stamp,
+        },
+      ],
+      createdAt: stamp,
+      updatedAt: stamp,
+      brandKit: source.brandKit
+        ? (JSON.parse(JSON.stringify(source.brandKit)) as Project['brandKit'])
+        : undefined,
+      csvProducts: source.csvProducts
+        ? (JSON.parse(JSON.stringify(source.csvProducts)) as Project['csvProducts'])
+        : undefined,
+      comments: [],
+      funnelOrder: source.funnelOrder ? [...source.funnelOrder] : undefined,
+      isTemplate,
+      templateName,
+    };
+    this.items.set(copy.id, copy);
+    return copy;
+  }
+
+  saveAsTemplate(id: string, templateName: string): Project | null {
+    const name = templateName.trim();
+    if (!name) return null;
+    return this.duplicateProject(id, {
+      isTemplate: true,
+      templateName: name,
+      name,
+    });
+  }
+
   clear(): void {
     this.items.clear();
   }
@@ -207,6 +289,20 @@ export class LocalStorageProjectStore extends MemoryProjectStore {
     const removed = super.delete(id);
     if (removed) this.save();
     return removed;
+  }
+
+  override duplicateProject(id: string, overrides?: DuplicateOverrides): Project | null {
+    this.load();
+    const copy = super.duplicateProject(id, overrides);
+    if (copy) this.save();
+    return copy;
+  }
+
+  override saveAsTemplate(id: string, templateName: string): Project | null {
+    this.load();
+    const template = super.saveAsTemplate(id, templateName);
+    if (template) this.save();
+    return template;
   }
 
   override clear(): void {

@@ -5,7 +5,7 @@
 // hai (lib/ai/generate.ts), is liye ye function kabhi throw nahi karta —
 // fail hone par `null` deta hai. Original code.
 
-import type { PageType, Section, Theme } from './types';
+import type { CsvProduct, PageType, Section, Theme } from './types';
 import { isSectionType } from './types';
 
 export function hasGeminiKey(): boolean {
@@ -62,6 +62,7 @@ export async function generateWithGemini(
   prompt: string,
   theme: Theme,
   pageType: PageType,
+  products?: CsvProduct[],
 ): Promise<Array<Partial<Section>> | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return null;
@@ -74,6 +75,16 @@ export async function generateWithGemini(
       `Page type: ${pageType}`,
       `Theme: ${theme.name} (${theme.style}), font ${theme.font}`,
       `Colors: primary ${theme.colors.primary}, secondary ${theme.colors.secondary}, background ${theme.colors.background}, text ${theme.colors.text}, accent ${theme.colors.accent}`,
+      // Demo products (or the merchant's real csvProducts) so the product
+      // section features real names/prices instead of inventing its own.
+      ...(products && products.length > 0
+        ? [
+            `Products to feature (demo data unless the merchant supplied their own — do not invent others): ${products
+              .slice(0, 6)
+              .map((p) => `${p.name} ($${p.price})`)
+              .join(', ')}`,
+          ]
+        : []),
       'Generate the page sections as a JSON array.',
     ].join('\n');
     const res = await fetch(

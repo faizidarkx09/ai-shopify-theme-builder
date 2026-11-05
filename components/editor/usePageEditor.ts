@@ -26,6 +26,8 @@ export interface UsePageEditor {
   select: (id: string | null, el?: ElementKey) => void;
   patchSection: (id: string, patch: Partial<Section>) => void;
   replaceSection: (next: Section) => void;
+  /** Replace the whole section list (Cut A #4: version restore). */
+  replaceAllSections: (next: Section[]) => void;
   duplicate: (id: string) => void;
   move: (id: string, dir: -1 | 1) => void;
   remove: (id: string) => void;
@@ -67,6 +69,12 @@ export function usePageEditor(projectId: string, page: Page): UsePageEditor {
     setSections((prev) => prev.map((s) => (s.id === next.id ? next : s)));
   }, []);
 
+  const replaceAllSections = useCallback((next: Section[]) => {
+    setSections([...next]);
+    setSelectedId(null);
+    setSelectedElement("section");
+  }, []);
+
   const duplicate = useCallback((id: string) => {
     setSections((prev) => duplicateSection(prev, id));
   }, []);
@@ -99,6 +107,7 @@ export function usePageEditor(projectId: string, page: Page): UsePageEditor {
     select,
     patchSection,
     replaceSection,
+    replaceAllSections,
     duplicate,
     move,
     remove,

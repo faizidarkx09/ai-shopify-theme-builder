@@ -7,7 +7,9 @@
 
 import { NextResponse } from "next/server";
 import type { Section } from "@/lib/sections";
+import type { CsvProduct } from "@/lib/types";
 import { applyAiEdit } from "@/lib/sections";
+import { describeRegeneration, regenerateSection } from "@/lib/ai/regenerate";
 
 // NOTE: no `export const dynamic` here — Next 16 enables cacheComponents
 // in this scaffold and rejects the force-dynamic segment config; POST
@@ -96,7 +98,48 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { instruction, section } = (body ?? {}) as { instruction?: unknown; section?: unknown };
+  const { instruction, section, preview, mode, theme, products, seed } = (body ?? {}) as {
+    instruction?: unknown;
+    section?: unknown;
+    /** Cut A #4: preview mode — the route NEVER applies an edit itself. */
+    preview?: unknown;
+    /** Cut B #7: mode 'regenerate' — fresh variation of the same section. */
+    mode?: unknown;
+    theme?: unknown;
+    products?: unknown;
+    seed?: unknown;
+  };
+  // This route is preview-only by design (Cut A #4, staged AI edits): it
+  // returns the PROPOSED section and never writes anything. The client
+  // shows the proposal and applies it only when the user clicks Accept
+  // (PageEditor). `preview: true` in the request is accepted for clarity
+  // and `preview: true, applied: false` is echoed in every response so
+  // callers can rely on the contract. `preview` is optional — omitting it
+  // behaves exactly the same, so old callers keep working.
+  void preview;
+  if (mode === "regenerate") {
+    // Cut B #7: no instruction needed — regenerate varies the section
+    // itself. Same preview-only response shape as the edit flow.
+    if (!section || typeof section !== "object" || typeof (section as Section).id !== "string") {
+      return NextResponse.json({ error: "section (Section object, id ke saath) zaroori hai" }, { status: 400 });
+    }
+    const current = section as Section;
+    const list = Array.isArray(products) ? (products as CsvProduct[]) : undefined;
+    const seedNum = typeof seed === "number" && Number.isFinite(seed) ? Math.floor(seed) : 0;
+    const next = regenerateSection(
+      current,
+      theme && typeof theme === "object" ? (theme as Parameters<typeof regenerateSection>[1]) : null,
+      list,
+      seedNum,
+    );
+    return NextResponse.json({
+      section: next,
+      changes: describeRegeneration(current, next),
+      mode: "regenerate",
+      preview: true,
+      applied: false,
+    });
+  }
   if (typeof instruction !== "string" || !instruction.trim()) {
     return NextResponse.json({ error: "instruction (string) zaroori hai" }, { status: 400 });
   }
@@ -113,10 +156,13 @@ export async function POST(req: Request) {
       section: next,
       changes: describeChanges(current, next),
       mode: "gemini",
+      // Preview-only contract (Cut A #4): proposed, NOT applied.
+      preview: true,
+      applied: false,
     });
   }
 
   // 2) Rule-based fallback (also used when Gemini returns nothing useful).
   const { section: next, changes } = applyAiEdit(current, instruction);
-  return NextResponse.json({ section: next, changes, mode: "rules" });
+  return NextResponse.json({ section: next, changes, mode: "rules", preview: true, applied: false });
 }

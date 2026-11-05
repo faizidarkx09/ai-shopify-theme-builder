@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Align, Section } from "@/lib/sections";
-import { placeholderImage } from "@/lib/sections";
+import { layoutLabel, nextLayout, placeholderImage } from "@/lib/sections";
 
 export interface SectionToolbarProps {
   section: Section;
@@ -17,6 +17,12 @@ export interface SectionToolbarProps {
   onDelete: () => void;
   /** open the side panel focused on text editing */
   onEditInPanel: () => void;
+  /** Cut B #7: regenerate this section (staged proposal via PageEditor). */
+  onRegenerate?: (section: Section) => void;
+  /** Cut B #7: switch to a layout id from LAYOUTS for this section type. */
+  onLayoutChange?: (section: Section, layout: string) => void;
+  /** Cut B #8: scope the AI chat to this section. */
+  onAskAi?: (section: Section) => void;
 }
 
 const BTN =
@@ -29,6 +35,9 @@ export default function SectionToolbar({
   onMove,
   onDelete,
   onEditInPanel,
+  onRegenerate,
+  onLayoutChange,
+  onAskAi,
 }: SectionToolbarProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showImage, setShowImage] = useState(false);
@@ -71,6 +80,37 @@ export default function SectionToolbar({
         <button type="button" className={BTN} onClick={onEditInPanel} title="Edit text in side panel">
           ✏️ Text
         </button>
+        {/* Cut B #7/#8 — AI actions (no-ops when the parent doesn't wire them). */}
+        {onRegenerate ? (
+          <button
+            type="button"
+            className={`${BTN} font-semibold text-violet-700`}
+            onClick={() => onRegenerate(s)}
+            title="Regenerate this section — fresh copy, same layout (review before it applies)"
+          >
+            ⟳ Regenerate
+          </button>
+        ) : null}
+        {onLayoutChange ? (
+          <button
+            type="button"
+            className={BTN}
+            onClick={() => onLayoutChange(s, nextLayout(s.type, s.layout))}
+            title={`Layout: ${layoutLabel(s.type, s.layout)} — click to switch to the next arrangement`}
+          >
+            ⟳ Layout: {layoutLabel(s.type, s.layout)}
+          </button>
+        ) : null}
+        {onAskAi ? (
+          <button
+            type="button"
+            className={`${BTN} font-semibold text-violet-700`}
+            onClick={() => onAskAi(s)}
+            title="Ask AI about this section — scopes the AI chat to it"
+          >
+            ✦ Ask AI
+          </button>
+        ) : null}
         <button
           type="button"
           className={BTN}

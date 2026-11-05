@@ -1,0 +1,50 @@
+/* app/mobile.css — mobile-usability pass (Cut C, foundational).
+   Small and scoped: touch targets, overflow guards, tap feedback and a
+   stacking helper. No redesign, no layout restructuring. Imported from
+   app/layout.tsx alongside globals.css. */
+
+/* Coarse pointers (touch screens): 44px minimum touch targets on
+   buttons / inputs / selects inside the editor and dashboard. */
+@media (pointer: coarse) {
+  .stb-mobile-stack button,
+  .stb-mobile-stack input,
+  .stb-mobile-stack select,
+  .stb-mobile-stack textarea,
+  [data-editor-root] button,
+  [data-editor-root] input,
+  [data-editor-root] select,
+  [data-editor-root] textarea {
+    min-height: 44px;
+  }
+}
+
+/* Small screens: never allow horizontal page scroll; keep the preview
+   container inside the viewport. */
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+  [data-page-preview],
+  [data-editor-root] {
+    max-width: 100vw;
+  }
+  /* Slightly larger base font for readability on phones. */
+  html {
+    font-size: 17px;
+  }
+}
+
+/* Remove the grey tap flash on mobile browsers. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Helper: force a block to stack its children vertically on small screens
+   (use on rows that would otherwise squeeze side-by-side). */
+@media (max-width: 768px) {
+  .stb-mobile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

@@ -1,29 +1,95 @@
 "use client";
 
-// Editor SHELL ONLY (Agent 1) — layout: left chat box, right live preview,
-// browser-like page tabs on top, mobile/desktop toggle.
+// Editor SHELL ONLY (Agent 1) — state + handlers live here; layout is split
+// into components/editor/EditorTopBar.tsx (top bar), EditorChat.tsx (left
+// chat) and EditorPreview.tsx (right preview, incl. SectionView).
 // Generation yahan /api/generate (Agent 2, SSE) ko call karta hai aur
 // events ko live preview me dikhata hai; section ki asal editing
 // (toolbar/panel) Cut 2 — Agent 3 — ka kaam hai, is shell me sirf
 // section select/highlight hota hai.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getProjectStore } from "@/lib/db/store";
-import PageEditor from "@/components/editor/PageEditor";
+import EditorTopBar, { type ViewMode } from "@/components/editor/EditorTopBar";
+import EditorChat from "@/components/editor/EditorChat";
+import EditorPreview from "@/components/editor/EditorPreview";
+import PlanApproval from "@/components/editor/PlanApproval";
+import ExportModal from "@/components/editor/ExportModal";
+import ThemeTokensPanel from "@/components/editor/ThemeTokensPanel";
+import BrandKitPanel from "@/components/editor/BrandKitPanel";
+import CreditMeter from "@/components/editor/CreditMeter";
+import GuidedTour, {
+  DEFAULT_TOUR_CHECKLIST,
+  type TourChecklistItem,
+} from "@/components/editor/GuidedTour";
+import MediaLibrary from "@/components/editor/MediaLibrary";
+import SectionLibrary from "@/components/editor/SectionLibrary";
+import SeoPanel from "@/components/editor/SeoPanel";
+import { LANDING_PROMPT_KEY } from "@/app/page";
+import { FREE_STARTING_CREDITS, spendCredits } from "@/lib/credits";
+import { saveSections } from "@/lib/sections";
+import { THEME_PRESETS } from "@/lib/theme";
+import type { SitePlan } from "@/lib/ai/plan";
+import { applyAuditFix, auditProject, type AuditFix } from "@/lib/export/audit";
+import { duplicatePageAsVariant, prePublishChecklist, type ChecklistItem } from "@/lib/variants";
+import { polishPage, type PolishFix } from "@/lib/polish";
+import FunnelView from "@/components/editor/FunnelView";
+import CommentsPanel, { type NewCommentInput } from "@/components/editor/CommentsPanel";
+import CsvImport from "@/components/editor/CsvImport";
 import { canExportShopify, getBillingState } from "@/lib/billing";
 import { downloadPng, exportPagesToPng } from "@/lib/export/png";
 import {
   isSectionType,
-  placeholderImage,
+  type BrandKit,
+  type CsvProduct,
   type Page,
+  type PageSeo,
   type Project,
+  type ProjectComment,
   type Section,
+  type SectionAnimation,
   type Theme,
 } from "@/lib/types";
 
-type ViewMode = "desktop" | "mobile";
+const ENTRANCES: SectionAnimation["entrance"][] = [
+  "none",
+  "fade",
+  "slide-up",
+  "zoom",
+  "slide-left",
+];
+const HOVERS: SectionAnimation["hover"][] = ["none", "lift", "scale"];
+
+function normalizeAnimation(raw: unknown): SectionAnimation | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const a = raw as Record<string, unknown>;
+  const entrance =
+    typeof a.entrance === "string" &&
+    (ENTRANCES as readonly string[]).includes(a.entrance)
+      ? (a.entrance as SectionAnimation["entrance"])
+      : undefined;
+  const hover =
+    typeof a.hover === "string" && (HOVERS as readonly string[]).includes(a.hover)
+      ? (a.hover as SectionAnimation["hover"])
+      : undefined;
+  const delayMs = typeof a.delayMs === "number" ? a.delayMs : undefined;
+  if (entrance === undefined && hover === undefined && delayMs === undefined)
+    return undefined;
+  return { entrance, delayMs, hover };
+}
+
+function normalizeMeta(raw: unknown): Section["meta"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      out[k] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 function normalizeSection(raw: unknown): Section | null {
   if (!raw || typeof raw !== "object") return null;
@@ -50,7 +116,26 @@ function normalizeSection(raw: unknown): Section | null {
         ? s.align
         : "left",
     padding,
+    animation: normalizeAnimation(s.animation),
+    layout: typeof s.layout === "string" ? s.layout : undefined,
+    global: typeof s.global === "boolean" ? s.global : undefined,
+    customHtml: typeof s.customHtml === "string" ? s.customHtml : undefined,
+    customCss: typeof s.customCss === "string" ? s.customCss : undefined,
+    customJs: typeof s.customJs === "string" ? s.customJs : undefined,
+    meta: normalizeMeta(s.meta),
   };
+}
+
+function normalizeSeo(raw: unknown): PageSeo | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const seo: PageSeo = {
+    title: typeof o.title === "string" ? o.title : undefined,
+    description: typeof o.description === "string" ? o.description : undefined,
+    handle: typeof o.handle === "string" ? o.handle : undefined,
+    noindex: typeof o.noindex === "boolean" ? o.noindex : undefined,
+  };
+  return Object.values(seo).some((v) => v !== undefined) ? seo : undefined;
 }
 
 function normalizePage(raw: unknown): Page | null {
@@ -70,6 +155,15 @@ function normalizePage(raw: unknown): Page | null {
     sections: p.sections
       .map(normalizeSection)
       .filter((s): s is Section => s !== null),
+    seo: normalizeSeo(p.seo),
+    variantOf: typeof p.variantOf === "string" ? p.variantOf : undefined,
+    funnelStep:
+      p.funnelStep === "landing" ||
+      p.funnelStep === "product" ||
+      p.funnelStep === "upsell" ||
+      p.funnelStep === "thankyou"
+        ? p.funnelStep
+        : undefined,
   };
 }
 
@@ -87,6 +181,14 @@ function normalizeTheme(raw: unknown): Theme | null {
     )
   )
     return null;
+  const tokensRaw = t.tokens as Record<string, unknown> | undefined;
+  const tokens =
+    tokensRaw && typeof tokensRaw === "object"
+      ? {
+          radius: typeof tokensRaw.radius === "number" ? tokensRaw.radius : undefined,
+          spacing: typeof tokensRaw.spacing === "number" ? tokensRaw.spacing : undefined,
+        }
+      : undefined;
   return {
     name: t.name,
     font: t.font,
@@ -98,61 +200,22 @@ function normalizeTheme(raw: unknown): Theme | null {
       text: c.text as string,
       accent: c.accent as string,
     },
+    tokens:
+      tokens && (tokens.radius !== undefined || tokens.spacing !== undefined)
+        ? tokens
+        : undefined,
+    presetId: typeof t.presetId === "string" ? t.presetId : undefined,
+    displayName: typeof t.displayName === "string" ? t.displayName : undefined,
+    // Cut C #22 (integrator): keep the animation level across SSE theme
+    // events so a regeneration does not silently reset the user's choice.
+    animationLevel:
+      t.animationLevel === "none" ||
+      t.animationLevel === "low" ||
+      t.animationLevel === "medium" ||
+      t.animationLevel === "high"
+        ? t.animationLevel
+        : undefined,
   };
-}
-
-function SectionView({
-  section,
-  theme,
-  selected,
-  onSelect,
-}: {
-  section: Section;
-  theme: Theme;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const align =
-    section.align === "center"
-      ? "text-center"
-      : section.align === "right"
-        ? "text-right"
-        : "text-left";
-  return (
-    <section
-      onClick={onSelect}
-      className={`cursor-pointer ${align} ${
-        selected ? "ring-2 ring-pink-500 ring-inset" : ""
-      }`}
-      style={{
-        backgroundColor: section.bgColor ?? theme.colors.background,
-        color: section.textColor ?? theme.colors.text,
-        padding: `${section.padding ?? 48}px 24px`,
-      }}
-    >
-      <p className="text-xs font-semibold tracking-wide uppercase opacity-60">
-        {section.type}
-      </p>
-      {section.subtitle && (
-        <p className="mt-1 text-sm opacity-70">{section.subtitle}</p>
-      )}
-      <h3 className="mt-1 text-2xl font-bold">{section.title}</h3>
-      {section.text && <p className="mt-2 text-sm opacity-80">{section.text}</p>}
-      {section.image && (
-        <img
-          src={section.image}
-          alt={section.title}
-          className="mx-auto mt-4 max-h-64 w-full rounded-xl object-cover"
-          onError={(e) => {
-            const img = e.currentTarget;
-            if (!img.src.includes("picsum.photos")) {
-              img.src = placeholderImage(`${section.type}-${section.id}`);
-            }
-          }}
-        />
-      )}
-    </section>
-  );
 }
 
 export default function EditorPage() {
@@ -174,31 +237,426 @@ export default function EditorPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState("");
+  const [justDownloaded, setJustDownloaded] = useState(false);
+  // Cut A #1 — plan approval gate: plan shown after a free-text prompt,
+  // before any generation streams.
+  const [plan, setPlan] = useState<SitePlan | null>(null);
+  const [planApproved, setPlanApproved] = useState(false);
+  const [planLoading, setPlanLoading] = useState(false);
+  // Cut A #4 — bumped after a successful export to clear the draft badge.
+  const [clearDirtySignal, setClearDirtySignal] = useState(0);
+  // True only when the submit came from the "+ Page" quick action, which
+  // keeps the legacy direct-generate path (no plan gate).
+  const quickPageRef = useRef(false);
   const [streamingSections, setStreamingSections] = useState<Section[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Cut B #9 — reference URL from PromptStarters (EditorChat). Kept in a
+  // ref too so the plan-gate call never reads a stale closure.
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const referenceUrlRef = useRef("");
+  // Cut B #11/#13/#20 — right-side tabbed panel.
+  // Cut C adds Funnel | Comments | Products tabs (same panel).
+  const [rightTab, setRightTab] = useState<
+    "sections" | "seo" | "media" | "funnel" | "comments" | "products"
+  >("sections");
+  // Cut C #24 — Variant B notice + pre-publish checklist.
+  const [variantNotice, setVariantNotice] = useState("");
+  const [variantChecklist, setVariantChecklist] = useState<ChecklistItem[] | null>(null);
+  // Cut C #25 — comment mode + pins (owned here, persisted on the project).
+  const [commentMode, setCommentMode] = useState(false);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  // One staged comment proposal at a time (shown in PageEditor's
+  // Accept/Discard box); the queue advances only on Accept/Discard.
+  const [commentProposal, setCommentProposal] = useState<{
+    section: Section;
+    changes: string[];
+    commentId: string;
+  } | null>(null);
+  const commentQueueRef = useRef<ProjectComment[]>([]);
+  const [commentBusy, setCommentBusy] = useState(false);
+  const [commentError, setCommentError] = useState("");
+  // Cut C #30 — Polish pass results.
+  const [polishFixes, setPolishFixes] = useState<PolishFix[] | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  // Cut C #23 — funnel page generation busy state.
+  const [funnelBusy, setFunnelBusy] = useState(false);
+  // Cut B #17 — guided tour after the first generation for this project.
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState<0 | 1 | 2 | 3>(0);
+  const [tourChecklist, setTourChecklist] =
+    useState<TourChecklistItem[]>(DEFAULT_TOUR_CHECKLIST);
+  // Cut B lag fix — bumped whenever the store's sections change outside
+  // PageEditor (audit fix, library insert/swap, media apply) so the
+  // preview remounts and shows the new sections immediately.
+  const [previewRemountKey, setPreviewRemountKey] = useState(0);
+  // Cut B #18 — landing prefill must run once per mount.
+  const prefillDoneRef = useRef(false);
+  // Reference summary returned with the plan (title / niche / accent).
+  const [planReference, setPlanReference] = useState<{
+    title?: string;
+    nicheHint?: string;
+    accent?: string;
+  } | null>(null);
 
   useEffect(() => {
-    const found = getProjectStore().get(projectId);
+    const store = getProjectStore();
+    const found = store.get(projectId);
     if (!found) {
       setNotFound(true);
       return;
     }
-    setProject(found as Project);
-    setActivePageId(found.pages[0]?.id ?? null);
+    // Cut B #14 — free projects start at 100 test credits; initialise
+    // the field when an older or landing-created project has none
+    // (getCredits already defaults to 100, this makes it explicit).
+    let current = found as Project;
+    if (!current.credits) {
+      const updated = store.update(current.id, {
+        credits: { balance: FREE_STARTING_CREDITS, used: 0, history: [] },
+      });
+      if (updated) current = updated as Project;
+    }
+    setProject(current);
+    setActivePageId(current.pages[0]?.id ?? null);
+    // Cut B #18 — landing prefill: ?prompt= first, then sessionStorage.
+    if (prefillDoneRef.current) return;
+    prefillDoneRef.current = true;
+    let prefill = "";
+    try {
+      const params = new URLSearchParams(window.location.search);
+      prefill = params.get("prompt") ?? "";
+      if (!prefill) {
+        prefill =
+          window.sessionStorage.getItem(
+            `${LANDING_PROMPT_KEY}:${projectId}`,
+          ) ?? "";
+      }
+      window.sessionStorage.removeItem(`${LANDING_PROMPT_KEY}:${projectId}`);
+      // Consume the query param so a refresh does not re-run (and
+      // re-charge) the plan gate.
+      if (params.get("prompt")) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      // Private mode / no storage — prompt stays empty.
+    }
+    const clean = prefill.trim();
+    if (!clean) return;
+    setPrompt(clean);
+    // Fresh landing project (no pages yet) → run the plan gate with it.
+    if (current.pages.length === 0) {
+      setTimeout(() => {
+        void runPlanGate(clean, current);
+      }, 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const activePage: Page | null =
     project?.pages.find((p) => p.id === activePageId) ?? null;
-  const previewSections =
-    streamingSections.length > 0
-      ? streamingSections
-      : (activePage?.sections ?? []);
 
   function saveProject(patch: Partial<Project>) {
     if (!project) return;
     const updated = getProjectStore().update(project.id, patch);
     if (updated) setProject(updated as Project);
+  }
+
+  // Cut B #14 — persist a credit spend for any project object. Uses the
+  // store directly (no stale-state risk from the `project` closure),
+  // which matters for the landing prefill and the generate loop.
+  function persistCredits(spentProject: Project) {
+    const updated = getProjectStore().update(spentProject.id, {
+      credits: spentProject.credits,
+    });
+    if (updated) setProject(updated as Project);
+  }
+
+  // Cut A #4 — PageEditor returns a whole project after a version push or
+  // restore; persist its pages/theme/versions through the same store.
+  // Cut B #14 — AI edits and regenerates are staged inside PageEditor
+  // (it calls /api/edit itself and offers no pre-call hook), so their
+  // 2-credit charge lands here at Accept time, when the version snapshot
+  // is pushed: a new version labelled "AI edit: …" / "AI add section: …"
+  // is charged as one aiEdit (2 test credits). Restores are not charged.
+  function handleProjectChange(next: Project) {
+    const prevVersions = project?.versions ?? [];
+    const newVersion = (next.versions ?? []).find(
+      (v) => !prevVersions.some((pv) => pv.id === v.id),
+    );
+    const patch: Partial<Project> = {
+      pages: next.pages,
+      theme: next.theme,
+      versions: next.versions,
+    };
+    if (
+      newVersion &&
+      (newVersion.label.startsWith("AI edit:") ||
+        newVersion.label.startsWith("AI add section:"))
+    ) {
+      const spent = spendCredits(next, "aiEdit");
+      if (spent.ok) {
+        patch.credits = spent.project.credits;
+      } else {
+        setError(
+          "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+        );
+      }
+    }
+    const updated = getProjectStore().update(next.id, patch);
+    if (updated) setProject(updated as Project);
+  }
+
+  // Cut A #3 — audit is computed when the export modal opens.
+  const exportAudit = useMemo(() => {
+    if (!exportOpen || !project || !activePage) return null;
+    return auditProject(project, activePage);
+  }, [exportOpen, project, activePage]);
+
+  // Cut A #3 — one-click audit fix: apply to the active page and persist.
+  // Cut B lag fix — PageEditor holds its own section state AND a
+  // localStorage mirror (lib/sections saveSections), so a store-only
+  // update never reached the preview. The fixed sections are written to
+  // both, then the preview is remounted (previewRemountKey) so the fix
+  // shows immediately instead of after a page switch.
+  function handleApplyFix(fix: AuditFix) {
+    if (!project || !activePage) return;
+    const fixed = applyAuditFix(activePage, fix);
+    if (fixed === activePage) return;
+    saveProject({
+      pages: project.pages.map((p) =>
+        p.id === activePage.id ? fixed : p,
+      ),
+    });
+    saveSections(project.id, activePage.id, fixed.sections);
+    setPreviewRemountKey((n) => n + 1);
+    setExportMsg("Fix lag gaya — page update ho gaya.");
+  }
+
+  // ---- Cut C #24 — Variant B --------------------------------------------
+  // Duplicate the active page as Variant B, persist, select it, and show
+  // the AI suggestion + pre-publish checklist.
+  function handleDuplicateVariant(pageId: string) {
+    if (!project) return;
+    const result = duplicatePageAsVariant(project, pageId);
+    if (!result) {
+      setError("Page nahi mili — Variant B nahi ban saka.");
+      return;
+    }
+    const updated = getProjectStore().update(project.id, {
+      pages: result.project.pages,
+    });
+    if (updated) setProject(updated as Project);
+    setActivePageId(result.variantPage.id);
+    setVariantNotice(result.suggestion);
+    setVariantChecklist(
+      prePublishChecklist(result.project, result.variantPage),
+    );
+    setStatus(`Variant B ready hai — “${result.variantPage.title}”.`);
+  }
+
+  // ---- Cut C #30 — Polish pass -------------------------------------------
+  function handlePolish() {
+    if (!project || !activePage || polishing) return;
+    setPolishing(true);
+    try {
+      const { page, fixes } = polishPage(activePage, project.theme);
+      saveProject({
+        pages: project.pages.map((p) =>
+          p.id === activePage.id ? page : p,
+        ),
+      });
+      syncSectionsAndRemount(activePage.id, page.sections);
+      setPolishFixes(fixes);
+      setStatus(
+        fixes.length > 0
+          ? `Polish ho gaya — ${fixes.length} fix${fixes.length === 1 ? "" : "es"} lag gaye.`
+          : "Polish ho gaya — koi fix zaroori nahi tha.",
+      );
+    } finally {
+      setPolishing(false);
+    }
+  }
+
+  // ---- Cut C #25 — Comments ----------------------------------------------
+  const pageComments: ProjectComment[] = activePage
+    ? (project?.comments ?? []).filter((c) => c.pageId === activePage.id)
+    : [];
+
+  function handleAddComment(input: NewCommentInput) {
+    if (!project) return;
+    const comment: ProjectComment = {
+      id: `cmt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      ...input,
+      status: "open",
+      createdAt: new Date().toISOString(),
+    };
+    saveProject({ comments: [...(project.comments ?? []), comment] });
+    setSelectedCommentId(comment.id);
+  }
+
+  function handleResolveComment(id: string) {
+    if (!project) return;
+    saveProject({
+      comments: (project.comments ?? []).map((c) =>
+        c.id === id ? { ...c, status: "done" as const } : c,
+      ),
+    });
+  }
+
+  /** Scope a comment to one section: explicit sectionId first, else the
+   *  section nearest the pin (sections stack vertically in preview order,
+   *  so the pin's y% picks the section index), else the first section. */
+  function scopeSectionForComment(
+    comment: ProjectComment,
+    page: Page,
+  ): Section | null {
+    if (page.sections.length === 0) return null;
+    if (comment.sectionId) {
+      const byId = page.sections.find((s) => s.id === comment.sectionId);
+      if (byId) return byId;
+    }
+    const idx = Math.min(
+      page.sections.length - 1,
+      Math.max(0, Math.floor((comment.yPct / 100) * page.sections.length)),
+    );
+    return page.sections[idx] ?? page.sections[0] ?? null;
+  }
+
+  /** One comment -> one preview-only /api/edit call -> staged proposal in
+   *  PageEditor's Accept/Discard box. Resolves only on Accept. */
+  async function applyComment(comment: ProjectComment) {
+    if (!project) return;
+    const page =
+      project.pages.find((p) => p.id === comment.pageId) ?? activePage;
+    const section = page ? scopeSectionForComment(comment, page) : null;
+    if (!page || !section) {
+      setCommentError("Comment apply nahi ho saka — koi section nahi mila.");
+      advanceCommentQueue(comment.id);
+      return;
+    }
+    setCommentBusy(true);
+    setCommentError("");
+    try {
+      const res = await fetch("/api/edit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruction: comment.text,
+          section,
+          preview: true,
+          theme: project.theme,
+        }),
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = (await res.json()) as {
+        section: Section;
+        changes: string[];
+      };
+      // Switch to the comment's page so the proposal renders there.
+      setActivePageId(page.id);
+      setCommentProposal({
+        section: data.section,
+        changes: data.changes ?? ["Comment applied as a proposed edit."],
+        commentId: comment.id,
+      });
+    } catch (err) {
+      setCommentError(
+        `Comment apply fail ho gaya: ${err instanceof Error ? err.message : "unknown error"}`,
+      );
+      advanceCommentQueue(comment.id);
+    } finally {
+      setCommentBusy(false);
+    }
+  }
+
+  /** Move the Apply-all queue forward after Accept, Discard or failure. */
+  function advanceCommentQueue(doneId: string) {
+    const rest = commentQueueRef.current.filter((c) => c.id !== doneId);
+    commentQueueRef.current = rest;
+    if (rest.length > 0) {
+      void applyComment(rest[0] as ProjectComment);
+    }
+  }
+
+  /** Apply-all: open comments on the active page, one at a time, in list order. */
+  function handleApplyAllComments() {
+    if (!project || commentBusy || commentProposal) return;
+    const open = pageComments.filter((c) => c.status === "open");
+    if (open.length === 0) return;
+    commentQueueRef.current = open;
+    setCommentError("");
+    void applyComment(open[0] as ProjectComment);
+  }
+
+  function handleCommentProposalAccept(commentId: string) {
+    handleResolveComment(commentId);
+    setCommentProposal(null);
+    advanceCommentQueue(commentId);
+  }
+
+  function handleCommentProposalDiscard(commentId: string) {
+    setCommentProposal(null);
+    advanceCommentQueue(commentId);
+  }
+
+  // ---- Cut C #23 — Funnel -------------------------------------------------
+  async function handleGenerateFunnelPage(step: "upsell" | "thankyou") {
+    if (!project || generating || funnelBusy) return;
+    const slug = step === "upsell" ? "upsell" : "thank-you";
+    const title = step === "upsell" ? "Upsell" : "Thank You";
+    const clean =
+      step === "upsell"
+        ? "Generate upsell page with bundle offer"
+        : "Generate thank-you page with order confirmation";
+    const spend = spendCredits(project, "generatePage");
+    if (!spend.ok) {
+      setError(
+        "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+      );
+      return;
+    }
+    persistCredits(spend.project);
+    setFunnelBusy(true);
+    setGenerating(true);
+    setError("");
+    setStreamingSections([]);
+    try {
+      const { page } = await streamGenerate(
+        {
+          prompt: clean,
+          pageType: "home",
+          theme: project.theme,
+          projectId: project.id,
+          ...(project.csvProducts ? { products: project.csvProducts } : {}),
+          ...(project.brandKit ? { brandKit: project.brandKit } : {}),
+        },
+        { slug, title },
+      );
+      const funnelPage: Page = { ...page, slug, title, funnelStep: step };
+      const baseOrder = project.funnelOrder ?? project.pages.map((p) => p.id);
+      saveProject({
+        pages: [...project.pages, funnelPage],
+        funnelOrder: [...baseOrder, funnelPage.id],
+      });
+      setActivePageId(funnelPage.id);
+      setStatus(`Ho gaya — “${title}” page ready hai.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Funnel page nahi ban saka.");
+      setStatus("");
+    } finally {
+      setStreamingSections([]);
+      setGenerating(false);
+      setFunnelBusy(false);
+    }
+  }
+
+  // ---- Cut C — CSV import --------------------------------------------------
+  function handleCsvImport(products: CsvProduct[]) {
+    if (!project) return;
+    saveProject({ csvProducts: products });
+    setStatus(
+      `${products.length} real product${products.length === 1 ? "" : "s"} import ho gaye — next generation me demo catalog ki jagah ye use honge.`,
+    );
+    setRightTab("sections");
   }
 
   // INTEGRATION (Agent 3 PageEditor -> Agent 5 store): sections change hone
@@ -213,6 +671,128 @@ export default function EditorPage() {
         p.id === activePage.id ? { ...p, sections } : p,
       ),
     });
+  }
+
+  // ---- Cut B #11/#13/#20 — side-panel actions ---------------------------
+  // Store-side section changes (library insert/swap, media apply, audit
+  // fix) must ALSO update PageEditor's localStorage mirror and remount
+  // the preview — otherwise PageEditor rehydrates the old sections and
+  // syncs them back over the change (same lag as the audit fix).
+  function syncSectionsAndRemount(pageId: string, sections: Section[]) {
+    saveSections(projectId, pageId, sections);
+    setPreviewRemountKey((n) => n + 1);
+  }
+
+  function handleLibraryInsert(section: Section) {
+    if (!project || !activePage) {
+      setError("Pehle ek page generate karo, phir section insert hoga.");
+      return;
+    }
+    const next = [...activePage.sections, section];
+    saveProject({
+      pages: project.pages.map((p) =>
+        p.id === activePage.id ? { ...p, sections: next } : p,
+      ),
+    });
+    syncSectionsAndRemount(activePage.id, next);
+    setSelectedSectionId(section.id);
+    setStatus(`Section add ho gaya: ${section.title || section.type}.`);
+  }
+
+  function handleLibrarySwap(section: Section) {
+    if (!project || !activePage || !selectedSectionId) return;
+    const next = activePage.sections.map((s) =>
+      s.id === selectedSectionId ? section : s,
+    );
+    saveProject({
+      pages: project.pages.map((p) =>
+        p.id === activePage.id ? { ...p, sections: next } : p,
+      ),
+    });
+    syncSectionsAndRemount(activePage.id, next);
+    setSelectedSectionId(section.id);
+    setStatus(`Section swap ho gaya: ${section.title || section.type}.`);
+  }
+
+  function handleSeoChange(seo: PageSeo) {
+    if (!project || !activePage) return;
+    saveProject({
+      pages: project.pages.map((p) =>
+        p.id === activePage.id ? { ...p, seo } : p,
+      ),
+    });
+  }
+
+  /** Patch one section's image anywhere in the project (active page or not). */
+  function patchSectionImage(sectionId: string, imageUrl: string) {
+    if (!project) return;
+    const target = project.pages.find((p) =>
+      p.sections.some((s) => s.id === sectionId),
+    );
+    if (!target) return;
+    const nextSections = target.sections.map((s) =>
+      s.id === sectionId ? { ...s, image: imageUrl } : s,
+    );
+    saveProject({
+      pages: project.pages.map((p) =>
+        p.id === target.id ? { ...p, sections: nextSections } : p,
+      ),
+    });
+    syncSectionsAndRemount(target.id, nextSections);
+  }
+
+  function handleApplyImage(sectionId: string, imageUrl: string) {
+    patchSectionImage(sectionId, imageUrl);
+    setStatus("Image apply ho gayi.");
+  }
+
+  function handleRegenerateImage(imageUrl: string) {
+    if (!project || !selectedSectionId) {
+      setError(
+        "Pehle preview me ek section select karo, phir image regenerate hogi.",
+      );
+      return;
+    }
+    // Cut B #14 — 1 test credit per regenerated image.
+    const spend = spendCredits(project, "regenerateImage");
+    if (!spend.ok) {
+      setError(
+        "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+      );
+      return;
+    }
+    persistCredits(spend.project);
+    patchSectionImage(selectedSectionId, imageUrl);
+    setStatus("Fresh placeholder image lag gayi (picsum — AI image nahi).");
+  }
+
+  /** Cut B #10 — "Read brand from URL": POST /api/brand, partial kit back. */
+  async function handleReadBrandFromUrl(
+    url: string,
+  ): Promise<Partial<BrandKit> | null> {
+    const res = await fetch("/api/brand", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => null)) as {
+      brandKit?: Partial<BrandKit>;
+    } | null;
+    return data?.brandKit ?? null;
+  }
+
+  /** Cut B #17 — show the guided tour after the FIRST generation, once. */
+  function maybeShowTour(hadPagesBefore: boolean) {
+    if (hadPagesBefore) return;
+    try {
+      if (window.localStorage.getItem(`stb-tour-done-${projectId}`)) return;
+    } catch {
+      return;
+    }
+    setTourStep(0);
+    setTourChecklist(DEFAULT_TOUR_CHECKLIST);
+    setTourOpen(true);
   }
 
   async function doExport(format: "shopify" | "code" | "png") {
@@ -244,6 +824,7 @@ export default function EditorPage() {
         } else {
           results.forEach(downloadPng);
           setExportMsg(`PNG download ho gaya: ${results.map((r) => r.filename).join(", ")}`);
+          setClearDirtySignal((n) => n + 1);
         }
       } catch (err) {
         setExportMsg(err instanceof Error ? err.message : "PNG export fail ho gaya.");
@@ -280,139 +861,341 @@ export default function EditorPage() {
           ? "Shopify theme zip download ho gaya — Shopify > Online Store > Import se upload karo. Theme me placeholder products hain."
           : "Code zip download ho gaya.",
       );
+      // Successful download clears the "Draft — not exported yet" badge;
+      // the modal stays open so the Shopify deploy guide is visible.
+      setJustDownloaded(format === "shopify");
+      setClearDirtySignal((n) => n + 1);
     } catch (err) {
       setExportMsg(err instanceof Error ? err.message : "Export fail ho gaya.");
     } finally {
       setExporting(false);
-      setExportOpen(false);
     }
   }
 
-  async function generate(e: React.FormEvent) {
-    e.preventDefault();
-    const clean = prompt.trim();
-    if (!clean || !project || generating) return;
-    setGenerating(true);
-    setError("");
-    setStreamingSections([]);
-    setStatus("Theme pehle ban raha hai…");
+  // One SSE generation call — shared by the legacy direct path and the
+  // plan path. Streams theme + sections live, returns the finished page
+  // (and the theme from the theme event, if any). `fallback` is used only
+  // if the stream ends without a `done` page.
+  async function streamGenerate(
+    body: Record<string, unknown>,
+    fallback: { slug: string; title: string },
+  ): Promise<{ theme: Theme | null; page: Page }> {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Generate API failed (${res.status}).`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let nextTheme: Theme | null = null;
+    let nextPage: Page | null = null;
+    const streamed: Section[] = [];
 
+    const handleEvent = (evt: unknown) => {
+      if (!evt || typeof evt !== "object") return;
+      const ev = evt as Record<string, unknown>;
+      if (ev.type === "theme") {
+        const t = normalizeTheme(ev.theme);
+        if (t) {
+          nextTheme = t;
+          setStatus(`Theme ban gaya: ${t.name} — ab page generate ho raha hai…`);
+        }
+      } else if (ev.type === "section") {
+        const s = normalizeSection(ev.section);
+        if (s) {
+          streamed.push(s);
+          setStreamingSections([...streamed]);
+          const total =
+            typeof ev.total === "number" ? ev.total : streamed.length;
+          setStatus(`Section ${streamed.length}/${total} ban raha hai…`);
+        }
+      } else if (ev.type === "done") {
+        const p = normalizePage(ev.page);
+        if (p) nextPage = p;
+      } else if (ev.type === "error") {
+        throw new Error(
+          typeof ev.message === "string" ? ev.message : "Generation failed.",
+        );
+      }
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        try {
+          handleEvent(JSON.parse(trimmed.slice(5)));
+        } catch {
+          // Adhoora chunk — agle read me poora hoga.
+        }
+      }
+    }
+    if (buffer.trim().startsWith("data:")) {
+      try {
+        handleEvent(JSON.parse(buffer.trim().slice(5)));
+      } catch {
+        // ignore
+      }
+    }
+
+    const page: Page =
+      nextPage ??
+      ({
+        id: `page_${Date.now().toString(36)}`,
+        slug: fallback.slug,
+        title: fallback.title,
+        sections: streamed,
+      } as Page);
+    return { theme: nextTheme, page };
+  }
+
+  // Legacy direct-generate path — one page, no plan gate. Kept for the
+  // "+ Page" quick action only.
+  async function generateDirect(clean: string) {
+    if (!project) return;
+    const hadPages = project.pages.length > 0;
+    // Cut B #14 — 5 test credits per generated page.
+    const spend = spendCredits(project, "generatePage");
+    if (!spend.ok) {
+      setError(
+        "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+      );
+      setStatus("");
+      return;
+    }
+    persistCredits(spend.project);
     const pageType =
       /product/i.test(clean) && !/categor/i.test(clean)
         ? "product"
         : /categor/i.test(clean)
           ? "category"
           : "home";
+    setStatus("Theme pehle ban raha hai…");
+    const { theme, page } = await streamGenerate(
+      {
+        prompt: clean,
+        pageType,
+        theme: project.theme,
+        projectId: project.id,
+        // Cut B #10 — brand kit rides along so the theme carries it.
+        ...(project.brandKit ? { brandKit: project.brandKit } : {}),
+      },
+      {
+        slug: pageType,
+        title: pageType === "home" ? "Home" : pageType,
+      },
+    );
+    const nextTheme = theme ?? project.theme;
+    saveProject({
+      theme: nextTheme,
+      pages: [...project.pages, page],
+      messages: [
+        ...project.messages,
+        {
+          id: `msg_${Date.now().toString(36)}`,
+          role: "user" as const,
+          text: clean,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    setActivePageId(page.id);
+    setStreamingSections([]);
+    setStatus(`Ho gaya — “${page.title}” page ready hai.`);
+    setPrompt("");
+    maybeShowTour(hadPages);
+  }
 
+  // Plan path — runs the approved plan page by page, sequentially. The
+  // plan theme is applied once, from the first page's theme event;
+  // project.csvProducts (when present) go in every generate body.
+  async function generateFromPlan(approved: SitePlan) {
+    if (!project) return;
+    const hadPages = project.pages.length > 0;
+    const clean = approved.prompt;
+    const built: Page[] = [];
+    let accTheme = project.theme;
+    // Credits are threaded through a local copy: spendCredits is pure,
+    // and the `project` closure goes stale across the loop's saves.
+    let creditProject = project;
+    let first = true;
+    for (let i = 0; i < approved.pages.length; i++) {
+      const planPage = approved.pages[i];
+      // Cut B #14 — 5 test credits per generated page; stop when the
+      // balance runs out, keeping the pages already built.
+      const spend = spendCredits(creditProject, "generatePage");
+      if (!spend.ok) {
+        setError(
+          "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+        );
+        setStatus("");
+        break;
+      }
+      creditProject = spend.project;
+      persistCredits(spend.project);
+      setStatus(
+        `Page ${i + 1}/${approved.pages.length} ban raha hai — “${planPage.title}”…`,
+      );
+      setStreamingSections([]);
+      const { theme, page } = await streamGenerate(
+        {
+          prompt: clean,
+          plan: approved,
+          planPageIndex: i,
+          projectId: project.id,
+          ...(project.csvProducts ? { products: project.csvProducts } : {}),
+          // Cut B #10 — brand kit rides along so the theme carries it.
+          ...(project.brandKit ? { brandKit: project.brandKit } : {}),
+        },
+        { slug: planPage.slug, title: planPage.title },
+      );
+      if (theme) accTheme = theme;
+      built.push(page);
+      if (first) {
+        // Theme from the plan applied once, from the first page's theme event.
+        saveProject({ theme: accTheme, pages: [...project.pages, ...built] });
+        setActivePageId(page.id);
+        first = false;
+      } else {
+        saveProject({ theme: accTheme, pages: [...project.pages, ...built] });
+      }
+      setStreamingSections([]);
+    }
+    if (built.length === 0) {
+      setStreamingSections([]);
+      return;
+    }
+    saveProject({
+      theme: accTheme,
+      pages: [...project.pages, ...built],
+      messages: [
+        ...project.messages,
+        {
+          id: `msg_${Date.now().toString(36)}`,
+          role: "user" as const,
+          text: clean,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    setActivePageId(built[built.length - 1]?.id ?? null);
+    setStreamingSections([]);
+    setStatus(`Ho gaya — ${built.length} pages ready hain.`);
+    setPrompt("");
+    maybeShowTour(hadPages);
+  }
+
+  // Cut A #1 — plan gate: a free-text prompt first fetches a plan from
+  // POST /api/plan and shows PlanApproval; nothing streams until the user
+  // approves. The "+ Page" quick action skips the gate (legacy path).
+  // Cut B #9/#14 — the reference URL (when set in PromptStarters) rides
+  // along as `referenceUrl`; the plan costs 10 test credits, spent before
+  // the API is called. Shared by the prompt form and the landing prefill.
+  async function runPlanGate(clean: string, proj: Project) {
+    const spend = spendCredits(proj, "plan");
+    if (!spend.ok) {
+      setError(
+        "Not enough test credits — upgrade on the Billing page (TEST MODE ONLY)",
+      );
+      setStatus("");
+      return;
+    }
+    persistCredits(spend.project);
+    setPlanLoading(true);
+    setError("");
+    setStatus("Plan ban raha hai — theme aur pages check karo…");
     try {
-      const res = await fetch("/api/generate", {
+      const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           prompt: clean,
-          pageType,
-          theme: project.theme,
-          projectId: project.id,
+          ...(referenceUrlRef.current
+            ? { referenceUrl: referenceUrlRef.current }
+            : {}),
         }),
       });
-      if (!res.ok || !res.body) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `Generate API failed (${res.status}).`);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? `Plan API failed (${res.status}).`);
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let nextTheme = project.theme;
-      let nextPage: Page | null = null;
-      const streamed: Section[] = [];
-
-      const handleEvent = (evt: unknown) => {
-        if (!evt || typeof evt !== "object") return;
-        const ev = evt as Record<string, unknown>;
-        if (ev.type === "theme") {
-          const t = normalizeTheme(ev.theme);
-          if (t) {
-            nextTheme = t;
-            setStatus(`Theme ban gaya: ${t.name} — ab page generate ho raha hai…`);
-          }
-        } else if (ev.type === "section") {
-          const s = normalizeSection(ev.section);
-          if (s) {
-            streamed.push(s);
-            setStreamingSections([...streamed]);
-            const total =
-              typeof ev.total === "number" ? ev.total : streamed.length;
-            setStatus(`Section ${streamed.length}/${total} ban raha hai…`);
-          }
-        } else if (ev.type === "done") {
-          const p = normalizePage(ev.page);
-          if (p) nextPage = p;
-        } else if (ev.type === "error") {
-          throw new Error(
-            typeof ev.message === "string" ? ev.message : "Generation failed.",
-          );
-        }
+      const data = (await res.json()) as {
+        plan?: SitePlan;
+        reference?: { title?: string; nicheHint?: string; accent?: string };
       };
+      if (!data.plan) throw new Error("Plan nahi mila.");
+      setPlan(data.plan);
+      setPlanReference(data.reference ?? null);
+      setPlanApproved(false);
+      setStatus(
+        data.reference?.title
+          ? `Plan ready hai — reference: ${data.reference.title}. Approve karo ya edit karo.`
+          : "Plan ready hai — approve karo ya edit karo.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Plan nahi ban saka.");
+      setStatus("");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
 
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          try {
-            handleEvent(JSON.parse(trimmed.slice(5)));
-          } catch {
-            // Adhoora chunk — agle read me poora hoga.
-          }
-        }
-      }
-      if (buffer.trim().startsWith("data:")) {
-        try {
-          handleEvent(JSON.parse(buffer.trim().slice(5)));
-        } catch {
-          // ignore
-        }
-      }
+  async function generate(e: React.FormEvent) {
+    e.preventDefault();
+    const clean = prompt.trim();
+    if (!clean || !project || generating || planLoading) return;
 
-      const page: Page =
-        nextPage ??
-        ({
-          id: `page_${Date.now().toString(36)}`,
-          slug: pageType,
-          title: pageType === "home" ? "Home" : pageType,
-          sections: streamed,
-        } as Page);
-
-      const newPages = [...project.pages, page];
-      saveProject({
-        theme: nextTheme,
-        pages: newPages,
-        messages: [
-          ...project.messages,
-          {
-            id: `msg_${Date.now().toString(36)}`,
-            role: "user" as const,
-            text: clean,
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-      setActivePageId(page.id);
+    // + Page quick action → legacy direct generate, no plan gate.
+    if (quickPageRef.current) {
+      quickPageRef.current = false;
+      setGenerating(true);
+      setError("");
       setStreamingSections([]);
-      setStatus(`Ho gaya — “${page.title}” page ready hai.`);
-      setPrompt("");
+      try {
+        await generateDirect(clean);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Generate nahi ho saka.");
+        setStatus("");
+        setStreamingSections([]);
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
+    await runPlanGate(clean, project);
+  }
+
+  // PlanApproval → "Approve & start generation": stream once per plan page.
+  async function approvePlan() {
+    if (!plan || !project || generating) return;
+    setPlanApproved(true);
+    setGenerating(true);
+    setError("");
+    setStreamingSections([]);
+    try {
+      await generateFromPlan(plan);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate nahi ho saka.");
       setStatus("");
       setStreamingSections([]);
     } finally {
       setGenerating(false);
+      setPlan(null);
+      setPlanApproved(false);
     }
   }
+
 
   if (notFound) {
     return (
@@ -437,206 +1220,362 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-[calc(100vh-121px)] flex-1 flex-col">
-      {/* Top bar: browser-like page tabs + view toggle + export (Cut 3/4) */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <span className="max-w-48 truncate font-semibold">{project.name}</span>
-        <span
-          className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-          title={project.theme.style}
-        >
-          {project.theme.name}
-        </span>
-        <div className="flex items-center gap-1 overflow-x-auto">
-          {project.pages.map((p) => (
+      <EditorTopBar
+        projectName={project.name}
+        themeName={project.theme.name}
+        themeStyle={project.theme.style}
+        pages={project.pages}
+        activePageId={activePageId}
+        onSelectPage={(id) => {
+          setActivePageId(id);
+          setStreamingSections([]);
+        }}
+        onAddPage={() => {
+          // + Page quick action: pre-fill + legacy direct generate (no plan gate).
+          quickPageRef.current = true;
+          setPrompt("Generate product detail page");
+          inputRef.current?.focus();
+        }}
+        view={view}
+        onViewChange={setView}
+        onOpenExport={() => {
+          setJustDownloaded(false);
+          setExportMsg("");
+          setExportOpen(true);
+        }}
+        exporting={exporting}
+        exportDisabled={!activePage}
+        onDuplicateVariant={handleDuplicateVariant}
+        onPolish={handlePolish}
+        polishing={polishing}
+      />
+
+      {/* Cut C #24 — Variant B suggestion + pre-publish checklist. */}
+      {variantNotice || variantChecklist ? (
+        <div className="border-b border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-900 dark:bg-violet-950">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+                Variant B ready hai
+              </p>
+              {variantNotice ? (
+                <p className="mt-0.5 text-sm text-violet-800 dark:text-violet-200">
+                  {variantNotice}
+                </p>
+              ) : null}
+              {variantChecklist ? (
+                <ul className="mt-2 space-y-1">
+                  {variantChecklist.map((item) => (
+                    <li
+                      key={item.item}
+                      className="flex items-center gap-2 text-sm text-violet-900 dark:text-violet-100"
+                    >
+                      <span aria-hidden>{item.done ? "✓" : "○"}</span>
+                      <span className={item.done ? "" : "opacity-70"}>
+                        {item.item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
             <button
-              key={p.id}
               type="button"
               onClick={() => {
-                setActivePageId(p.id);
-                setStreamingSections([]);
+                setVariantNotice("");
+                setVariantChecklist(null);
               }}
-              className={`rounded-t-lg border-b-2 px-3 py-1.5 text-sm whitespace-nowrap ${
-                p.id === activePageId
-                  ? "border-pink-600 font-semibold text-pink-600"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              }`}
+              className="rounded-full border border-violet-300 px-3 py-1 text-xs font-semibold text-violet-800 hover:bg-white dark:border-violet-700 dark:text-violet-200"
             >
-              {p.title}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              setPrompt("Generate product detail page");
-              inputRef.current?.focus();
-            }}
-            className="rounded-full border border-dashed border-zinc-400 px-3 py-1 text-sm text-zinc-500 hover:border-pink-500 hover:text-pink-600"
-          >
-            + Page
-          </button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-full border border-zinc-300 text-sm dark:border-zinc-700">
-            <button
-              type="button"
-              onClick={() => setView("desktop")}
-              className={`rounded-full px-3 py-1 ${view === "desktop" ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : ""}`}
-            >
-              Desktop
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("mobile")}
-              className={`rounded-full px-3 py-1 ${view === "mobile" ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : ""}`}
-            >
-              Mobile
+              Dismiss
             </button>
           </div>
-          <div className="relative">
+        </div>
+      ) : null}
+
+      {/* Cut C #30 — Polish fixes applied. */}
+      {polishFixes ? (
+        <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                Polish —{" "}
+                {polishFixes.length === 0
+                  ? "koi fix zaroori nahi tha"
+                  : `${polishFixes.length} fix${polishFixes.length === 1 ? "" : "es"} lag gaye`}
+              </p>
+              {polishFixes.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+                  {polishFixes.map((f) => (
+                    <li key={f.id}>{f.message}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
             <button
               type="button"
-              onClick={() => setExportOpen((v) => !v)}
-              disabled={exporting || !activePage}
-              className="rounded-full bg-pink-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+              onClick={() => setPolishFixes(null)}
+              className="rounded-full border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-800 hover:bg-white dark:border-emerald-700 dark:text-emerald-200"
             >
-              {exporting ? "Export…" : "Export ▾"}
+              Dismiss
             </button>
-            {exportOpen && (
-              <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                <button
-                  type="button"
-                  onClick={() => void doExport("shopify")}
-                  className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  Shopify theme (.zip) — paid plan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void doExport("code")}
-                  className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  Export to Code (.zip)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void doExport("png")}
-                  className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  Export current page as PNG
-                </button>
-              </div>
-            )}
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {/* Cut C #25 — comment-apply error (proposal itself is staged in PageEditor). */}
+      {commentError ? (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
+            <span>{commentError}</span>
+            <button
+              type="button"
+              onClick={() => setCommentError("")}
+              className="rounded-full border border-red-300 px-3 py-1 text-xs font-semibold hover:bg-white dark:border-red-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* Left: chat box */}
-        <aside className="flex w-full flex-col border-b border-zinc-200 md:w-96 md:border-r md:border-b-0 dark:border-zinc-800">
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            <p className="text-xs text-zinc-500">
-              Prompt: <span className="text-zinc-700 dark:text-zinc-300">{project.prompt}</span>
-            </p>
-            {project.messages.map((m) => (
-              <div
-                key={m.id}
-                className={`rounded-xl px-3 py-2 text-sm ${
-                  m.role === "user"
-                    ? "ml-8 bg-pink-50 text-pink-900 dark:bg-pink-950 dark:text-pink-100"
-                    : "mr-8 bg-zinc-100 dark:bg-zinc-900"
+        <EditorChat
+          projectPrompt={project.prompt}
+          messages={project.messages}
+          generating={generating || planLoading}
+          status={status}
+          error={error}
+          exportMsg={exportMsg}
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          onSubmit={generate}
+          inputRef={inputRef}
+          onReferenceUrl={(url) => {
+            setReferenceUrl(url);
+            referenceUrlRef.current = url;
+          }}
+          themeTokens={
+            <ThemeTokensPanel
+              theme={project.theme}
+              onThemeChange={(theme) => saveProject({ theme })}
+              presets={THEME_PRESETS}
+            />
+          }
+          brandKitPanel={
+            <BrandKitPanel
+              brandKit={project.brandKit}
+              onBrandKitChange={(kit) => saveProject({ brandKit: kit })}
+              onReadFromUrl={handleReadBrandFromUrl}
+            />
+          }
+          creditMeter={<CreditMeter project={project} />}
+        />
+
+        {plan && !planApproved ? (
+          <section className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-4 dark:bg-zinc-900">
+            <div className="mx-auto max-w-3xl">
+              {planReference &&
+              (planReference.title || planReference.nicheHint) ? (
+                <p className="mb-3 rounded-xl bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm dark:bg-zinc-950 dark:text-zinc-400">
+                  Reference: {planReference.title ?? planReference.nicheHint}
+                  {planReference.accent
+                    ? ` · accent ${planReference.accent}`
+                    : ""}
+                </p>
+              ) : null}
+              <PlanApproval
+                plan={plan}
+                onPlanChange={setPlan}
+                onApprove={() => void approvePlan()}
+                onCancel={() => {
+                  setPlan(null);
+                  setPlanReference(null);
+                  setStatus("");
+                }}
+                generating={generating}
+              />
+            </div>
+          </section>
+        ) : (
+          <EditorPreview
+            view={view}
+            theme={project.theme}
+            generating={generating || funnelBusy}
+            status={status}
+            streamingSections={streamingSections}
+            activePage={activePage}
+            projectId={project.id}
+            selectedSectionId={selectedSectionId}
+            onSelectSection={setSelectedSectionId}
+            onSectionsChange={handleSectionsChange}
+            project={project}
+            onProjectChange={handleProjectChange}
+            clearDirtySignal={clearDirtySignal}
+            remountKey={previewRemountKey}
+            // Cut C #22 — Animation Level select persists via saveProject.
+            onThemeChange={(theme) => saveProject({ theme })}
+            // Cut C #25 — Comment Mode pins + staged apply.
+            commentMode={commentMode}
+            onCommentModeChange={setCommentMode}
+            comments={project.comments ?? []}
+            onAddComment={handleAddComment}
+            selectedCommentId={selectedCommentId}
+            onSelectComment={setSelectedCommentId}
+            commentProposal={commentProposal}
+            onCommentProposalAccept={handleCommentProposalAccept}
+            onCommentProposalDiscard={handleCommentProposalDiscard}
+          />
+        )}
+
+        {/* Cut B #11/#13/#20 — right-side tabbed panel: Sections | SEO | Media.
+            Cut C adds Funnel | Comments | Products tabs (same panel). */}
+        <aside className="max-h-[45vh] w-full shrink-0 overflow-y-auto border-t border-zinc-200 md:max-h-none md:min-h-0 md:w-80 md:border-t-0 md:border-l dark:border-zinc-800">
+          <div className="flex flex-wrap gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
+            {(
+              [
+                { id: "sections", label: "Sections" },
+                { id: "seo", label: "SEO" },
+                { id: "media", label: "Media" },
+                { id: "funnel", label: "Funnel" },
+                { id: "comments", label: "Comments" },
+                { id: "products", label: "Products" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setRightTab(tab.id)}
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                  rightTab === tab.id
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
               >
-                {m.text}
-              </div>
-            ))}
-            {generating && status && (
-              <p className="animate-pulse text-sm text-pink-600">{status}</p>
-            )}
-            {exportMsg && (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                {exportMsg}{" "}
-                <Link href="/billing" className="font-semibold underline">
-                  Billing dekho
-                </Link>
-              </p>
-            )}
-          </div>
-          <form onSubmit={generate} className="border-t border-zinc-200 p-3 dark:border-zinc-800">
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Naya page ya edit likho… jaise “grocery store landing page”"
-                className="flex-1 rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-pink-500 dark:border-zinc-700 dark:bg-zinc-900"
-              />
-              <button
-                type="submit"
-                disabled={generating}
-                className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
-              >
-                {generating ? "…" : "Send"}
+                {tab.label}
+                {tab.id === "comments" &&
+                pageComments.some((c) => c.status === "open")
+                  ? ` (${pageComments.filter((c) => c.status === "open").length})`
+                  : ""}
               </button>
-            </div>
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-            {!generating && status && (
-              <p className="mt-2 text-xs text-green-700 dark:text-green-400">{status}</p>
-            )}
-          </form>
-        </aside>
-
-        {/* Right: live preview */}
-        <section className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-4 dark:bg-zinc-900">
-          <div
-            className={`mx-auto bg-white shadow-sm transition-all dark:bg-zinc-950 ${
-              view === "mobile" ? "max-w-[390px] rounded-3xl border-8 border-zinc-800" : "w-full max-w-4xl"
-            }`}
-            style={{
-              backgroundColor: project.theme.colors.background,
-              fontFamily: project.theme.font,
-            }}
-          >
-            {generating || streamingSections.length > 0 ? (
-              previewSections.length === 0 ? (
-                <div className="p-12 text-center text-zinc-500">
-                  <p className="text-lg font-semibold">Page ban raha hai…</p>
-                  <p className="mt-1 text-sm">{status}</p>
-                </div>
-              ) : (
-                previewSections.map((s) => (
-                  <SectionView
-                    key={s.id}
-                    section={s}
-                    theme={project.theme}
-                    selected={s.id === selectedSectionId}
-                    onSelect={() => setSelectedSectionId(s.id)}
-                  />
-                ))
-              )
-            ) : activePage ? (
-              <PageEditor
-                key={activePage.id}
-                projectId={project.id}
-                page={activePage}
-                theme={project.theme}
-                onSectionsChange={handleSectionsChange}
-              />
-            ) : (
-              <div className="p-12 text-center text-zinc-500">
-                <p className="text-lg font-semibold">Abhi koi page nahi hai</p>
-                <p className="mt-1 text-sm">
-                  Left chat me prompt likh kar pehla page generate karo — AI
-                  pehle theme, phir page-by-page preview banayega.
-                </p>
-              </div>
-            )}
+            ))}
           </div>
-          <p className="mt-3 text-center text-xs text-zinc-500">
-            Preview me placeholder images hain (picsum). Exported theme me bhi
-            placeholder content hota hai.
-          </p>
-        </section>
+          <div className="space-y-4 p-4">
+            {rightTab === "sections" ? (
+              <SectionLibrary
+                theme={project.theme}
+                products={project.csvProducts}
+                onInsert={handleLibraryInsert}
+                onSwap={handleLibrarySwap}
+                selectedSectionType={
+                  activePage?.sections.find(
+                    (s) => s.id === selectedSectionId,
+                  )?.type
+                }
+              />
+            ) : null}
+            {rightTab === "seo" && activePage ? (
+              <SeoPanel page={activePage} onSeoChange={handleSeoChange} />
+            ) : null}
+            {rightTab === "seo" && !activePage ? (
+              <p className="text-sm text-zinc-500">
+                Pehle ek page generate karo — phir uski SEO yahan dikhegi.
+              </p>
+            ) : null}
+            {rightTab === "media" ? (
+              <MediaLibrary
+                project={project}
+                onApplyImage={handleApplyImage}
+                onRegenerateImage={handleRegenerateImage}
+                selectedSectionId={selectedSectionId}
+              />
+            ) : null}
+            {rightTab === "funnel" ? (
+              <FunnelView
+                project={project}
+                onSelectPage={(id) => {
+                  setActivePageId(id);
+                  setStreamingSections([]);
+                }}
+                onGenerateFunnelPage={(step) => void handleGenerateFunnelPage(step)}
+                onReorder={(pageIds) => saveProject({ funnelOrder: pageIds })}
+              />
+            ) : null}
+            {rightTab === "comments" ? (
+              <div className="space-y-3">
+                <CommentsPanel
+                  comments={pageComments}
+                  onAddComment={handleAddComment}
+                  onResolveComment={handleResolveComment}
+                  onApplyAll={handleApplyAllComments}
+                  pageId={activePage?.id}
+                />
+                {commentBusy ? (
+                  <p className="text-xs text-zinc-500">
+                    Comment apply ho raha hai — proposal review box me aayega…
+                  </p>
+                ) : null}
+                {commentProposal ? (
+                  <p className="rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:bg-violet-950 dark:text-violet-100">
+                    Comment proposal review box me hai — Accept karo to comment
+                    resolve hoga, Discard karo to agla comment aayega.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {rightTab === "products" ? (
+              <CsvImport
+                onImport={handleCsvImport}
+                existingCount={project.csvProducts?.length ?? 0}
+              />
+            ) : null}
+          </div>
+        </aside>
       </div>
+
+      {exportOpen && activePage && exportAudit ? (
+        <ExportModal
+          project={project}
+          page={activePage}
+          audit={exportAudit}
+          onClose={() => setExportOpen(false)}
+          onExport={(format) => void doExport(format)}
+          onApplyFix={handleApplyFix}
+          exporting={exporting}
+          exportMsg={exportMsg}
+          billingAllowed={canExportShopify(getBillingState().planId).allowed}
+          shopifyFileCount={27}
+          justDownloaded={justDownloaded}
+        />
+      ) : null}
+
+      {/* Cut B #17 — guided first run, shown once after the first generation. */}
+      {tourOpen ? (
+        <GuidedTour
+          step={tourStep}
+          onNext={() =>
+            setTourStep((s) => (s < 3 ? ((s + 1) as 0 | 1 | 2 | 3) : s))
+          }
+          onSkip={() => setTourOpen(false)}
+          onDone={() => {
+            try {
+              window.localStorage.setItem(`stb-tour-done-${projectId}`, "1");
+            } catch {
+              // Private mode — tour just closes; it may show again.
+            }
+            setTourOpen(false);
+          }}
+          checklist={tourChecklist}
+          onToggleCheck={(id) =>
+            setTourChecklist((items) =>
+              items.map((it) =>
+                it.id === id ? { ...it, done: !it.done } : it,
+              ),
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }
+
