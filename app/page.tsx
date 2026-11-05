@@ -61,17 +61,19 @@ const GALLERY_THEMES = [
   {
     presetId: "rose-glow",
     prompt: "A skincare and beauty store with a soft pink glow theme",
-    line: "Soft pink beauty — skincare aur makeup stores ke liye.",
+    // Fix pass 2 — taglines kept short so the card hero block never
+    // truncates them mid-word (line-clamp-2 + short copy).
+    line: "Soft pink beauty — skincare stores ke liye.",
   },
   {
     presetId: "noir-luxe",
     prompt: "A modern fashion boutique, premium dark theme",
-    line: "Premium dark boutique — fashion aur luxury stores ke liye.",
+    line: "Premium dark boutique — fashion stores ke liye.",
   },
   {
     presetId: "fresh-mart",
     prompt: "A grocery store with fresh green style",
-    line: "Clean green grocery — fresh aur organic stores ke liye.",
+    line: "Clean green grocery — fresh stores ke liye.",
   },
 ] as const;
 
@@ -211,34 +213,50 @@ export default function Home() {
               </Button>
             </form>
             {error && (
-              <p className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-                {error}{" "}
-                <Link href="/billing" className="font-semibold underline">
-                  Billing dekho
-                </Link>
-              </p>
+              // Fix pass 2 — the free-limit block is ACTIONABLE, not a
+              // dead end: one line explaining the limit + two buttons
+              // (delete an old project / upgrade). Plain errors keep the
+              // single-line style.
+              <div className="mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                <p>{error}</p>
+                {error.includes("maximum") ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Link
+                      href="/dashboard"
+                      className="rounded-full bg-white px-3 py-1.5 font-semibold text-red-700 shadow-sm ring-1 ring-red-200 hover:bg-red-100"
+                    >
+                      Ek purana project delete karo
+                    </Link>
+                    <Link
+                      href="/billing"
+                      className="rounded-full bg-red-600 px-3 py-1.5 font-semibold text-white hover:bg-red-700"
+                    >
+                      Upgrade karo
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             )}
             <p className="mt-3 text-sm text-muted">Free to try</p>
           </div>
 
           {/* Phone-width framed preview — asli storefront, mock nahi.
               Photo-free: no <img> at all, so no wrong photo can appear.
-              Height-capped (560px) with a soft fade at the bottom so the
-              cut looks intentional instead of clipped mid-word. */}
-          <div className="relative mx-auto w-full max-w-[420px]">
-            <div className="max-h-[560px] overflow-hidden rounded-2xl">
-              <MiniStorePreview
-                theme={HERO_THEME}
-                prompt={HERO_PROMPT}
-                label="Rose Glow theme ka sample store preview"
-                photoFree
-              />
-            </div>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent"
+              Fix pass 2 — COMPACT (header + hero + product, tight
+              padding, small images): the preview fits its natural height,
+              so there is NO max-h cap, NO overflow-hidden and NO fade —
+              nothing is ever sliced mid-heading. */}
+          <div className="mx-auto w-full max-w-[420px]">
+            <MiniStorePreview
+              theme={HERO_THEME}
+              prompt={HERO_PROMPT}
+              label="Rose Glow theme ka sample store preview"
+              photoFree
+              compact
             />
-            <p className="mt-3 text-center text-sm text-muted">
+            {/* Fix pass 2 — caption in dark slate (was pale text-muted,
+                near-invisible on white). */}
+            <p className="mt-3 text-center text-sm text-slate-600">
               Aisa dikhega tumhara store — ye ek asli generated preview hai.
             </p>
           </div>

@@ -77,7 +77,15 @@ export default function PlanApproval({
   const totalSections = plan.pages.reduce((n, p) => n + p.sections.length, 0);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+    // Fix pass 2 — the card is a bounded flex column: content scrolls
+    // inside (min-h-0 flex-1 overflow-y-auto) and the Approve bar is a
+    // pinned flex sibling below it — never sticky inside the scrolling
+    // content (sticky bottom-0 could not stick: the bar was the last
+    // child, so its parent ended at the bar itself and it scrolled away
+    // with the 22-row list). The editor page gives this card a bounded
+    // height (Step 2 is a flex column), so the inner scroll engages.
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <h2 className="text-lg font-bold">Your store plan</h2>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Check the theme and the pages below. Change anything you like, then
@@ -203,7 +211,9 @@ export default function PlanApproval({
                 <ul className="mt-2 space-y-1 pl-4">
                   {page.sections.map((section, sectionIndex) => (
                     <li key={`${section.type}-${sectionIndex}`} className="flex items-center gap-2">
-                      <span className="w-40 shrink-0 truncate text-xs text-zinc-500">
+                      {/* Fix pass 2 — label WRAPS (no truncate): the full
+                          plain-language label is always readable. */}
+                      <span className="w-44 shrink-0 break-words text-xs leading-snug text-zinc-500">
                         {SECTION_LABELS[section.type]}
                       </span>
                       <input
@@ -295,9 +305,13 @@ export default function PlanApproval({
         </div>
       ) : null}
 
-      {/* Sticky bottom bar — Approve is always visible, never only at
-          the bottom of a long scroll. */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 mt-5 border-t border-zinc-200 bg-white/95 px-5 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+      </div>
+
+      {/* Pinned bottom bar — a flex sibling BELOW the scrolling content,
+          so Approve is always visible even with the 22-section list
+          expanded. Not sticky: sticky needs a parent that extends past
+          the bar, which the card does not have. */}
+      <div className="mt-4 -mx-5 -mb-5 shrink-0 border-t border-zinc-200 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

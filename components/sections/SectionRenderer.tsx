@@ -21,6 +21,12 @@ export interface SectionRendererProps {
    * initial + name, so a preview can never show a wrong photo.
    */
   photoFree?: boolean;
+  /**
+   * Fix pass 2 — compact preview mode: smaller images so a preview fits
+   * its natural height (hero h-40, product h-24) instead of needing a
+   * height cap that slices content mid-heading.
+   */
+  compact?: boolean;
 }
 
 function elProps(
@@ -81,6 +87,8 @@ function Img({
   if (photoFree) {
     // Designed tile: gradient block + big initial + name label. No photo,
     // no external image — the preview always looks intentional.
+    // Fix pass 2 — the label WRAPS to two lines (line-clamp-2) instead
+    // of truncating mid-word ("Glow Like Never B…").
     const initial = (alt.trim().charAt(0) || "★").toUpperCase();
     return (
       <div
@@ -91,7 +99,7 @@ function Img({
         {...elProps(el, editMode, selected, onSelect)}
       >
         <span className="text-4xl font-bold text-white/95">{initial}</span>
-        <span className="w-full truncate text-xs font-semibold text-white/85">
+        <span className="w-full line-clamp-2 text-xs font-semibold break-words text-white/85">
           {alt}
         </span>
       </div>
@@ -151,12 +159,15 @@ export default function SectionRenderer({
   selectedElement,
   onSelectElement,
   photoFree,
+  compact = false,
 }: SectionRendererProps) {
   const base: React.CSSProperties = {
     backgroundColor: s.bgColor ?? "#ffffff",
     color: s.textColor ?? "#111827",
     textAlign: s.align ?? "left",
-    padding: s.padding ?? 24,
+    // Fix pass 2 — compact preview: 16px padding (template sections
+    // carry 48px) so the preview fits its natural height.
+    padding: compact ? 16 : (s.padding ?? 24),
   };
   const titleStyle: React.CSSProperties = {
     fontSize: s.fontSize ?? 24,
@@ -227,7 +238,8 @@ export default function SectionRenderer({
         <Img
           src={s.image ?? placeholderImage(`${s.type}-hero`)}
           alt={s.title}
-          className="h-64 w-full rounded-2xl object-cover md:h-80"
+          // Fix pass 2 — compact preview: h-40 instead of h-64/md:h-80.
+          className={`w-full rounded-2xl object-cover ${compact ? "h-32" : "h-64 md:h-80"}`}
           el="image"
           editMode={editMode}
           selected={selectedElement}
@@ -243,7 +255,8 @@ export default function SectionRenderer({
               <Img
                 src={s.image ?? placeholderImage(`${s.type}-hero`)}
                 alt={s.title}
-                className="h-64 w-full rounded-2xl object-cover md:h-80"
+                // Fix pass 2 — compact preview: h-40 instead of h-64/md:h-80.
+                className={`w-full rounded-2xl object-cover ${compact ? "h-32" : "h-64 md:h-80"}`}
                 el="image"
                 editMode={editMode}
                 selected={selectedElement}
@@ -334,7 +347,8 @@ export default function SectionRenderer({
           <Img
             src={placeholderImage(`product-${p.name.toLowerCase().replace(/\s+/g, "-")}`, 600, 500)}
             alt={p.name}
-            className="h-40 w-full object-cover"
+            // Fix pass 2 — compact preview: h-24 instead of h-40.
+            className={`w-full object-cover ${compact ? "h-24" : "h-40"}`}
             el="image"
             editMode={editMode}
             selected={selectedElement}

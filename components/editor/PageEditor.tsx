@@ -88,6 +88,12 @@ export interface PageEditorProps {
    * drawer (the modal itself still lives here, staged like any edit).
    */
   openCustomBlockSignal?: number;
+  /**
+   * Fix pass 2 — photo-free preview: sections render designed gradient
+   * tiles instead of picsum photos (demo store). Forwarded to every
+   * SectionRenderer below.
+   */
+  photoFree?: boolean;
 }
 
 interface PendingProposal {
@@ -132,6 +138,7 @@ export default function PageEditor({
   onCommentProposalDiscard,
   advanced = false,
   openCustomBlockSignal = 0,
+  photoFree = false,
 }: PageEditorProps) {
   const ed = usePageEditor(projectId, page);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -509,6 +516,7 @@ export default function PageEditor({
                 editMode={false}
                 selectedElement={null}
                 onSelectElement={() => undefined}
+                photoFree={photoFree}
               />
             </div>
             <div className="mt-3 flex gap-2">
@@ -570,6 +578,7 @@ export default function PageEditor({
                   editMode={ed.editMode}
                   selectedElement={active ? ed.selectedElement : null}
                   onSelectElement={(el) => ed.select(s.id, el)}
+                  photoFree={photoFree}
                 />
                 {/* Cut B #16 — quick AI chips on the selected section. */}
                 {active ? (

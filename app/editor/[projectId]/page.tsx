@@ -84,8 +84,10 @@ function createDemoProjectFromTemplate(
   const pages = plan.pages.map((pp) =>
     buildPageFromTemplate(DEMO_PROMPT, plan.theme, pp.pageType, pp.title),
   );
+  // Fix pass 2 — isDemo: the demo never counts toward the free-project
+  // limit (lib/db/store count) and its preview renders photo-free.
   return store.create(
-    { name: DEMO_PROJECT_NAME, prompt: DEMO_PROMPT, theme: plan.theme, pages },
+    { name: DEMO_PROJECT_NAME, prompt: DEMO_PROMPT, theme: plan.theme, pages, isDemo: true },
     ownerId,
   );
 }
@@ -337,11 +339,28 @@ export default function EditorPage() {
     // A first-time visitor never sees the "Project nahi mila" dead end.
     if (projectId === "demo") {
       const user = getOrCreateDemoUser();
+      // Fix pass 2 — reuse by the isDemo flag (name fallback covers
+      // demo projects stored before the flag existed).
       const existing =
-        store.list(user.id).find((p) => p.name === DEMO_PROJECT_NAME) ?? null;
-      const demo = existing ?? createDemoProjectFromTemplate(store, user.id);
+        store.list(user.id).find((p) => p.isDemo === true || p.name === DEMO_PROJECT_NAME) ?? null;
+      let demo = existing ?? createDemoProjectFromTemplate(store, user.id);
+      // Fix pass 2 — migrate demos stored before the isDemo flag
+      // existed (e.g. the QA browser's demo): flag them so they stop
+      // eating a free slot.
+      if (!demo.isDemo) {
+        const flagged = store.update(demo.id, { isDemo: true });
+        if (flagged) demo = flagged as Project;
+      }
       setProject(demo);
       setActivePageId(demo.pages[0]?.id ?? null);
+      // Fix pass 2 — the demo opens WITH a plan already derived (free,
+      // synchronous derivePlan — no credits, no API call), so a
+      // first-time visitor lands on Step 2 (Plan) with a visible plan
+      // and an Approve button, never on an empty Step 3.
+      setPlan(derivePlan(DEMO_PROMPT));
+      setPlanApproved(false);
+      setPlanReference(null);
+      setPrompt(DEMO_PROMPT);
       return;
     }
     const found = store.get(projectId);
@@ -1485,14 +1504,18 @@ export default function EditorPage() {
           ) : null}
 
           {/* ================= Step 2 — Plan ================= */}
+          {/* Fix pass 2 — this container is a bounded flex column (no
+              own scroll): PlanApproval fills it and scrolls its content
+              internally, so its Approve bar stays pinned at the bottom
+              even with the 22-section list expanded. */}
           {wizardStep === 1 ? (
-            <div className="min-h-0 flex-1 overflow-y-auto bg-panel p-4">
-              <div className="mx-auto max-w-3xl">
+            <div className="flex min-h-0 flex-1 flex-col bg-panel p-4">
+              <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
                 {plan && !planApproved ? (
                   <>
                     {planReference &&
                     (planReference.title || planReference.nicheHint) ? (
-                      <p className="mb-3 rounded-xl bg-white px-4 py-2 text-sm text-body shadow-sm">
+                      <p className="mb-3 shrink-0 rounded-xl bg-white px-4 py-2 text-sm text-body shadow-sm">
                         Reference: {planReference.title ?? planReference.nicheHint}
                         {planReference.accent
                           ? ` · accent ${planReference.accent}`
@@ -1566,6 +1589,9 @@ export default function EditorPage() {
                 streamingSections={streamingSections}
                 activePage={activePage}
                 projectId={project.id}
+                // Fix pass 2 — the demo store's preview is photo-free
+                // (designed tiles, never a wrong picsum photo).
+                photoFree={project.isDemo === true}
                 selectedSectionId={selectedSectionId}
                 onSelectSection={setSelectedSectionId}
                 onSectionsChange={handleSectionsChange}

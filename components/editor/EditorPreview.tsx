@@ -83,6 +83,14 @@ export interface EditorPreviewProps {
   openCustomBlockSignal?: number;
   /** Wave 2 — hide the Comment Mode toggle (beginner mode). */
   hideCommentToggle?: boolean;
+  /**
+   * Fix pass 2 — photo-free preview: sections render designed gradient
+   * tiles instead of picsum photos. True for the demo store, so its
+   * preview can never show a wrong stock photo (e.g. a camera for a
+   * beauty store). Real user projects keep picsum placeholders, labelled
+   * below.
+   */
+  photoFree?: boolean;
 }
 
 function SectionView({
@@ -169,6 +177,7 @@ export default function EditorPreview({
   advanced = false,
   openCustomBlockSignal = 0,
   hideCommentToggle = false,
+  photoFree = false,
 }: EditorPreviewProps) {
   const previewSections =
     streamingSections.length > 0
@@ -313,6 +322,7 @@ export default function EditorPreview({
             projectId={projectId}
             page={activePage}
             theme={theme}
+            photoFree={photoFree}
             onSectionsChange={onSectionsChange}
             project={project}
             onProjectChange={onProjectChange}
@@ -380,8 +390,9 @@ export default function EditorPreview({
         )}
       </div>
       <p className="mt-3 text-center text-xs text-zinc-500">
-        Preview me placeholder images hain (picsum). Exported theme me bhi
-        placeholder content hota hai.
+        {photoFree
+          ? "Demo store preview — designed tiles dikh rahe hain, koi photo nahi. Exported theme me placeholder content hota hai."
+          : "Preview me placeholder images hain (picsum). Exported theme me bhi placeholder content hota hai."}
       </p>
     </section>
   );

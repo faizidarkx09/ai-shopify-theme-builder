@@ -243,6 +243,13 @@ export interface Project {
   /** True when this project is saved as a reusable template (Cut C #27). */
   isTemplate?: boolean;
   templateName?: string;
+  /**
+   * Fix pass 2 — true for the built-in demo store (/editor/demo). A demo
+   * never counts toward the free-project limit (lib/db/store count) and
+   * its preview renders photo-free, so peeking at the demo never eats a
+   * free slot or shows a wrong stock photo.
+   */
+  isDemo?: boolean;
   /** Demo products imported from CSV (Cut C: Shopify CSV import first). */
   csvProducts?: CsvProduct[];
 }
@@ -252,6 +259,8 @@ export interface NewProjectInput {
   prompt: string;
   theme?: Theme;
   pages?: Page[];
+  /** Fix pass 2 — mark the built-in demo store (never counts to the limit). */
+  isDemo?: boolean;
 }
 
 /** Fields a caller is allowed to change after creation. */
@@ -271,6 +280,7 @@ export type ProjectPatch = Partial<
     | 'isTemplate'
     | 'templateName'
     | 'csvProducts'
+    | 'isDemo'
   >
 >;
 

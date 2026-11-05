@@ -104,6 +104,8 @@ export class MemoryProjectStore implements ProjectStore {
       prompt: input.prompt.trim(),
       theme: input.theme ?? { ...DEFAULT_THEME, colors: { ...DEFAULT_THEME.colors } },
       pages: input.pages ?? [],
+      // Fix pass 2 — the built-in demo store never counts to the limit.
+      isDemo: input.isDemo ?? false,
       messages: [
         {
           id: createSectionId(),
@@ -130,7 +132,11 @@ export class MemoryProjectStore implements ProjectStore {
   }
 
   count(ownerId?: string): number {
-    return this.list(ownerId).length;
+    // Fix pass 2 — the built-in demo store never eats a free slot: a
+    // visitor who only peeked at /editor/demo still has both free
+    // projects. (list() still shows the demo — it is a real, deletable
+    // project; only the limit count ignores it.)
+    return this.list(ownerId).filter((p) => !p.isDemo).length;
   }
 
   update(id: string, patch: ProjectPatch): Project | null {

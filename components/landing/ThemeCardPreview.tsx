@@ -1,11 +1,15 @@
 // components/landing/ThemeCardPreview.tsx — Fix pass (theme cards).
-// A theme card's preview is a FIXED-height (320px) designed mini
+// A theme card's preview is a FIXED-height (336px) designed mini
 // storefront — header strip + hero block + 3 product tiles. No <img>
 // at all: solid colours, gradients and typographic tiles with real
 // product names from the demo catalog, so a preview can never show a
 // wrong photo and text can never clip mid-word ("Contac").
-// Every block has a fixed height and text uses line-clamp / truncate
-// (ellipsis, word-safe) — nothing overflows, nothing is cut mid-line.
+// Fix pass 2 — names WRAP to two lines (line-clamp-2, break-words),
+// never truncate mid-word; header shows the short theme name
+// ("Rose Glow", not "Rose Glow — Soft Pink Beauty") and all four nav
+// links (Home / Shop / About / Contact) fit.
+// Every block has a fixed height — nothing overflows, nothing is cut
+// mid-line.
 "use client";
 
 import { DEMO_NICHES } from "@/lib/demoCatalog";
@@ -30,29 +34,37 @@ export function ThemeCardPreview({
   const nicheId = theme.presetId ? (PRESET_NICHE[theme.presetId] ?? "fashion") : "fashion";
   const niche = DEMO_NICHES.find((n) => n.id === nicheId) ?? DEMO_NICHES[0];
   const products = niche.products.slice(0, 3);
-  const storeName = theme.displayName ?? theme.name;
+  // Fix pass 2 — the SHORT theme name ("Rose Glow"), not the long
+  // displayName ("Rose Glow — Soft Pink Beauty") which truncated to
+  // "Rose Glow — Soft …" in the header and hero.
+  const storeName = theme.name;
   const heroBg = `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.accent})`;
 
   return (
     <div
       role="img"
       aria-label={`${storeName} theme ka sample store preview`}
-      className="flex h-[320px] flex-col overflow-hidden rounded-xl border border-border bg-white"
+      // Fix pass 2 — 336px: product row grew to 120px so names wrap to
+      // two lines instead of truncating mid-word.
+      className="flex h-[336px] flex-col overflow-hidden rounded-xl border border-border bg-white"
     >
-      {/* Header strip — fixed 44px: store name + 3 short nav links. */}
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border bg-white px-4">
+      {/* Header strip — fixed 44px: short store name + ALL 4 nav links.
+          Fix pass 2 — "Contact" is back (was dropped); smaller text and
+          gaps so all four links fit. */}
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border bg-white px-3">
         <span className="min-w-0 truncate text-sm font-bold text-ink">
           {storeName}
         </span>
-        <span className="flex shrink-0 gap-3 text-xs font-medium text-body">
+        <span className="flex shrink-0 gap-2 text-[11px] font-medium text-body">
           <span>Home</span>
           <span>Shop</span>
           <span>About</span>
+          <span>Contact</span>
         </span>
       </div>
 
       {/* Hero block — fills the middle: theme gradient, headline,
-          one-line tagline, white CTA pill. Text clamps, never clips. */}
+          one-line tagline, white CTA pill. Text wraps, never clips. */}
       <div
         className="flex min-h-0 flex-1 flex-col justify-center px-4 py-3"
         style={{ background: heroBg }}
@@ -60,14 +72,18 @@ export function ThemeCardPreview({
         <p className="line-clamp-2 text-lg leading-snug font-bold text-white">
           {storeName}
         </p>
-        <p className="mt-1 line-clamp-1 text-xs text-white/85">{tagline}</p>
+        {/* Fix pass 2 — tagline wraps to 2 lines (was line-clamp-1,
+            which cut it off with "…"). */}
+        <p className="mt-1 line-clamp-2 text-xs leading-snug text-white/85">{tagline}</p>
         <span className="mt-3 inline-flex w-fit rounded-full bg-white px-3 py-1 text-xs font-bold text-ink">
           Shop Now
         </span>
       </div>
 
-      {/* Product row — fixed 104px: 3 tiles, gradient initial + name + price. */}
-      <div className="grid h-[104px] shrink-0 grid-cols-3 gap-2 bg-white p-2">
+      {/* Product row — fixed 120px: 3 tiles, gradient initial + name + price.
+          Fix pass 2 — names WRAP to two lines (line-clamp-2, break-words)
+          instead of truncating mid-word ("Vitamin C Se…"). */}
+      <div className="grid h-[120px] shrink-0 grid-cols-3 gap-2 bg-white p-2">
         {products.map((p) => (
           <div
             key={p.name}
@@ -80,7 +96,7 @@ export function ThemeCardPreview({
             >
               {p.name.trim().charAt(0).toUpperCase()}
             </span>
-            <span className="w-full truncate text-[11px] leading-tight font-semibold text-ink">
+            <span className="w-full line-clamp-2 text-[11px] leading-tight font-semibold break-words text-ink">
               {p.name}
             </span>
             <span className="text-[11px] text-muted">${p.price}</span>

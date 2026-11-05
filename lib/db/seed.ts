@@ -95,7 +95,7 @@ export function seedDemoProjectIfEmpty(
   if (store.count(ownerId) > 0) return null;
   const demo = buildDemoProject(ownerId);
   return store.create(
-    { name: demo.name, prompt: demo.prompt, theme: demo.theme, pages: demo.pages },
+    { name: demo.name, prompt: demo.prompt, theme: demo.theme, pages: demo.pages, isDemo: true },
     ownerId,
   );
 }

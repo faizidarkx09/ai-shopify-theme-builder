@@ -17,12 +17,19 @@ import type { Theme } from "@/lib/types";
 
 /** Sample preview me ye sections dikhte hain, isi order me. */
 const PREVIEW_TYPES = ["header", "hero", "product", "features"] as const;
+/**
+ * Fix pass 2 — compact hero preview: sirf header + hero + product.
+ * Features section hata di (wo hi preview ko 800px+ lamba karta tha,
+ * jis se 560px cap "Best Sellers" heading ko beech se kaat deta tha).
+ */
+const COMPACT_PREVIEW_TYPES = ["header", "hero", "product"] as const;
 
 export function MiniStorePreview({
   theme,
   prompt,
   label,
   photoFree = false,
+  compact = false,
 }: {
   /** Preset theme (Rose Glow / Noir Luxe / Fresh Mart …). */
   theme: Theme;
@@ -32,13 +39,20 @@ export function MiniStorePreview({
   label: string;
   /** True = no <img> at all; designed gradient tiles instead. */
   photoFree?: boolean;
+  /**
+   * Fix pass 2 — true = sirf header + hero + product, chhoti images.
+   * Preview apni natural height me fit hota hai (~560px) — koi cap,
+   * koi overflow-hidden, koi kata hua heading nahi.
+   */
+  compact?: boolean;
 }) {
   const sections = useMemo(() => {
     const page = buildPageFromTemplate(prompt, theme, "home");
+    const types = compact ? COMPACT_PREVIEW_TYPES : PREVIEW_TYPES;
     return page.sections.filter((s) =>
-      (PREVIEW_TYPES as readonly string[]).includes(s.type),
+      (types as readonly string[]).includes(s.type),
     );
-  }, [theme, prompt]);
+  }, [theme, prompt, compact]);
 
   return (
     <div
@@ -54,6 +68,7 @@ export function MiniStorePreview({
             section={s}
             theme={theme}
             photoFree={photoFree}
+            compact={compact}
           />
         ))}
       </div>
